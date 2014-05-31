@@ -17,9 +17,13 @@
 
 package org.apache.spark.rdd
 
-import scala.reflect.ClassTag
+import java.util.Comparator
 
-import org.apache.spark.{Logging, RangePartitioner}
+import scala.collection.mutable.ArrayBuffer
+import scala.reflect._
+
+import org.apache.spark.{Logging, RangePartitioner, SparkEnv}
+import org.apache.spark.util.collection.ExternalAppendOnlyMap
 
 /**
  * Extra functions available on RDDs of (key, value) pairs where the key is sortable through
@@ -41,14 +45,16 @@ import org.apache.spark.{Logging, RangePartitioner}
  *   rdd.sortByKey()
  * }}}
  */
-class OrderedRDDFunctions[K : Ordering : ClassTag,
+
+class OrderedRDDFunctions[K: Ordering: ClassTag,
                           V: ClassTag,
-                          P <: Product2[K, V] : ClassTag](
+                          P <: Product2[K, V]: ClassTag](
     self: RDD[P])
   extends Logging with Serializable {
 
   private val ordering = implicitly[Ordering[K]]
 
+  private type SortCombiner = ArrayBuffer[P]
   /**
    * Sort the RDD by key, so that each partition contains a sorted range of the elements. Calling
    * `collect` or `save` on the resulting RDD will return or output an ordered list of records
@@ -56,15 +62,56 @@ class OrderedRDDFunctions[K : Ordering : ClassTag,
    * order of the keys).
    */
   def sortByKey(ascending: Boolean = true, numPartitions: Int = self.partitions.size): RDD[P] = {
+    val externalSorting = SparkEnv.get.conf.getBoolean("spark.shuffle.spill", true)
     val part = new RangePartitioner(numPartitions, self, ascending)
     val shuffled = new ShuffledRDD[K, V, V, P](self, part).setKeyOrdering(ordering)
-    shuffled.mapPartitions(iter => {
-      val buf = iter.toArray
+    if (!externalSorting) {
+      shuffled.mapPartitions(iter => {
+        val buf = iter.toArray
+        if (ascending) {
+          buf.sortWith((x, y) => ordering.lt(x._1, y._1)).iterator
+        } else {
+          buf.sortWith((x, y) => ordering.gt(x._1, y._1)).iterator
+        }
+      }, preservesPartitioning = true)
+    } else {
+      shuffled.mapPartitions(iter => {
+        val map = createExternalMap(ascending)
+        while (iter.hasNext) {
+          val kv = iter.next()
+          map.insert(kv._1, kv.asInstanceOf[P])
+        }
+        map.sortIterator
+      }).flatMap(elem => elem._2)
+    }
+  }
+
+  private def createExternalMap(ascending: Boolean): ExternalAppendOnlyMap[K, P, SortCombiner] = {
+    val createCombiner: (P => SortCombiner) = value => {
+      val newCombiner = new SortCombiner
+      newCombiner += value
+      newCombiner
+    }
+    val mergeValue: (SortCombiner, P) => SortCombiner = (combiner, value) => {
+      combiner += value
+      combiner
+    }
+    val mergeCombiners: (SortCombiner, SortCombiner) => SortCombiner =
+      (combiner1, combiner2) => {combiner1 ++= combiner2}
+
+    new ExternalAppendOnlyMap[K, P, SortCombiner](
+      createCombiner, mergeValue, mergeCombiners,
+      customizedComparator = new KeyComparator[K, SortCombiner](ascending, ordering))
+  }
+
+  private class KeyComparator[K, SortCombiner](ascending: Boolean, ord: Ordering[K])
+  extends Comparator[(K, SortCombiner)] {
+    def compare (kc1: (K, SortCombiner), kc2: (K, SortCombiner)): Int = {
       if (ascending) {
-        buf.sortWith((x, y) => ordering.lt(x._1, y._1)).iterator
+        ord.compare(kc1._1, kc2._1)
       } else {
-        buf.sortWith((x, y) => ordering.gt(x._1, y._1)).iterator
+        ord.compare(kc2._1, kc1._1)
       }
-    }, preservesPartitioning = true)
+    }
   }
 }
