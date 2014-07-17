@@ -101,7 +101,7 @@ class OrderedRDDFunctions[K: Ordering: ClassTag,
 
     new ExternalAppendOnlyMap[K, P, SortCombiner](
       createCombiner, mergeValue, mergeCombiners,
-      customizedComparator = new KeyComparator[K, SortCombiner](ascending, ordering))
+      comparator = Some(new KeyComparator[K, SortCombiner](ascending, ordering)))
   }
 
   private class KeyComparator[K, SortCombiner](ascending: Boolean, ord: Ordering[K])

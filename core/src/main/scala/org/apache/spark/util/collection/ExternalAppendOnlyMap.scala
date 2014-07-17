@@ -64,7 +64,7 @@ class ExternalAppendOnlyMap[K, V, C](
     mergeCombiners: (C, C) => C,
     serializer: Serializer = SparkEnv.get.serializer,
     blockManager: BlockManager = SparkEnv.get.blockManager,
-    customizedComparator: Comparator[(K, C)] = null
+    comparator: Option[Comparator[(K, C)]] = None
   )
   extends Iterable[(K, C)] with Serializable with Logging {
 
@@ -107,8 +107,7 @@ class ExternalAppendOnlyMap[K, V, C](
   private var _diskBytesSpilled = 0L
 
   private val fileBufferSize = sparkConf.getInt("spark.shuffle.file.buffer.kb", 100) * 1024
-  private val comparator =
-    if (customizedComparator == null) new KCComparator[K, C] else customizedComparator
+  private val comp = comparator.getOrElse(new KeyHashComparator[K, C])
   private val ser = serializer.newInstance()
 
   /**
@@ -176,7 +175,7 @@ class ExternalAppendOnlyMap[K, V, C](
     }
 
     try {
-      val it = currentMap.destructiveSortedIterator(comparator)
+      val it = currentMap.destructiveSortedIterator(comp)
       while (it.hasNext) {
         val kv = it.next()
         writer.write(kv)
@@ -225,7 +224,7 @@ class ExternalAppendOnlyMap[K, V, C](
 
   def sortIterator: Iterator[(K, C)] = {
     if (spilledMaps.isEmpty) {
-      currentMap.destructiveSortedIterator(comparator)
+      currentMap.destructiveSortedIterator(comp)
     } else {
       new ExternalIterator()
     }
@@ -242,7 +241,7 @@ class ExternalAppendOnlyMap[K, V, C](
 
     // Input streams are derived both from the in-memory map and spilled maps on disk
     // The in-memory map is sorted in place, while the spilled maps are already in sorted order
-    private val sortedMap = currentMap.destructiveSortedIterator(comparator)
+    private val sortedMap = currentMap.destructiveSortedIterator(comp)
     private val inputStreams = (Seq(sortedMap) ++ spilledMaps).map(it => it.buffered)
 
     inputStreams.foreach { it =>
@@ -265,7 +264,7 @@ class ExternalAppendOnlyMap[K, V, C](
         kcPairs += kc
         // TODO: if we have a hash-based comparator (the default KCComparator), this is
         // inefficient because it keeps re-hashing the key of kc.
-        while (it.hasNext && comparator.compare(it.head, kc) == 0) {
+        while (it.hasNext && comp.compare(it.head, kc) == 0) {
           kcPairs += it.next()
         }
       }
@@ -312,7 +311,7 @@ class ExternalAppendOnlyMap[K, V, C](
       // For all other streams that may have this key (i.e. have the same minimum key hash),
       // merge in the corresponding value (if any) from that stream
       val mergedBuffers = ArrayBuffer[StreamBuffer](minBuffer)
-      while (mergeHeap.length > 0 && comparator.compare(mergeHeap.head.pairs.head, minPair) == 0) {
+      while (mergeHeap.length > 0 && comp.compare(mergeHeap.head.pairs.head, minPair) == 0) {
         val newBuffer = mergeHeap.dequeue()
         minCombiner = mergeIfKeyExists(minKey, minCombiner, newBuffer)
         mergedBuffers += newBuffer
@@ -347,7 +346,7 @@ class ExternalAppendOnlyMap[K, V, C](
 
       override def compareTo(other: StreamBuffer): Int = {
         // descending order because mutable.PriorityQueue dequeues the max, not the min
-        comparator.compare(other.pairs.head, pairs.head)
+        comp.compare(other.pairs.head, pairs.head)
       }
     }
   }
@@ -429,7 +428,6 @@ class ExternalAppendOnlyMap[K, V, C](
 }
 
 private[spark] object ExternalAppendOnlyMap {
-
   /**
    * Return the key hash code of the given (key, combiner) pair.
    * If the key is null, return a special hash code.
@@ -441,7 +439,7 @@ private[spark] object ExternalAppendOnlyMap {
   /**
    * A comparator for (key, combiner) pairs based on their key hash codes.
    */
-  private class KCComparator[K, C] extends Comparator[(K, C)] {
+  private class KeyHashComparator[K, C] extends Comparator[(K, C)] {
     def compare(kc1: (K, C), kc2: (K, C)): Int = {
       val hash1 = getKeyHashCode(kc1)
       val hash2 = getKeyHashCode(kc2)
