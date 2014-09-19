@@ -356,7 +356,7 @@ object UnsafeSort extends Logging {
         // Merge the records from the two ranges into pointers2, then copy that back into pointers
         var i1 = s1
         var i2 = s2
-        var pos = 0
+        var pos = s1
         while (i1 < e1 && i2 < e2) {
           if (ord.compare(pointers(i1), pointers(i2)) < 0) {
             pointers2(pos) = pointers(i1)
