@@ -430,6 +430,7 @@ object UnsafeSort extends Logging {
 
         val sortBuffer = sortBuffers.get()
 
+        /*
         readFileIntoBuffer(outputFile, sortBuffer)
         buildLongPointers(sortBuffer, fileSize)
 
@@ -444,8 +445,9 @@ object UnsafeSort extends Logging {
           println(s"Sorting $recordsPerPartition records took $timeTaken ms")
           scala.Console.flush()
         }
+        */
 
-        //readFileAndSort(outputFile, sortBuffer)
+        readFileAndSort(outputFile, sortBuffer)
 
         Iterator((recordsPerPartition, sortBuffer.pointers))
       }
