@@ -451,6 +451,66 @@ object UnsafeSort extends Logging {
     }
   }
 
+  private def radixSort(data: Array[Long], start: Int, end: Int) {
+    val KEY_LEN = 10
+
+    // Number of times each byte appears in each position in the key; used so that we can
+    // do the radix sort "in place" instead of allocating a new array
+    val counts = Array.fill(KEY_LEN, 256)(0)
+
+    var i = 0
+    var j = 0
+
+    // Do a first pass to compute how many times each byte occurs in each position
+    i = start
+    while (i < end) {
+      j = 0
+      while (j < KEY_LEN) {
+        val b = UNSAFE.getByte(data(i) + j) & 0xFF
+        counts(j)(b) += 1
+      }
+      i += 1
+    }
+
+    // Now move the longs around to sort them by each position
+    j = KEY_LEN - 1
+    while (j >= 0) {
+      // Skip this j if all the bytes are the same (useful in reduce tasks with similar keys)
+      if (counts(j).count(_ != 0) > 1) {
+        // Position at which we can insert the next record with a given value of byte j
+        val insertPos = Array.fill(256)(0)
+        insertPos(0) = start
+        for (b <- 1 until 256) {
+          insertPos(b) = insertPos(b - 1) + counts(j)(b)
+        }
+        val insertStart = insertPos.clone()
+        // Position of byte we're examining now; we will swap it with one at the right location
+        var pos = start
+        var curInsertRun = 0
+        while (pos < end) {
+          val b = UNSAFE.getByte(data(pos) + j) & 0xFF
+          val old = data(insertPos(b))
+          data(insertPos(b)) = data(pos)
+          data(pos) = old
+          insertPos(b) += 1
+          // It's now possible that pos has ended up in an insert run, which means that we inserted
+          // ourselves in the run that was right before us; if so we need to advance pos, skipping
+          // any new insert runs we might find ourselves inside of
+          while (curInsertRun < 256 && pos < end &&
+              pos >= insertStart(curInsertRun) && pos < insertPos(curInsertRun)) {
+            pos += 1
+            if (curInsertRun < 255 && pos == insertPos(curInsertRun + 1)) {
+              // We've gotten into the next run, so update curInsertRun; note that there's no way
+              // future elements could fall into the previous run since we counted byte occurrences
+              curInsertRun += 1
+            }
+          }
+        }
+      }
+      j -= 1
+    }
+  }
+
   private[spark]
   final class LongArraySorter extends SortDataFormat[Long, Array[Long]] {
     /** Return the sort key for the element at the given index. */
