@@ -264,8 +264,8 @@ object UnsafeSort extends Logging {
     assert(fileSize % 100 == 0)
     assert(sortBuffer.ioBuf.limit % 100 == 0)
 
-    // Size of chunks we'll sort in the background thread: 100 MB
-    val chunkSize = 25 * sortBuffer.ioBuf.limit
+    // Size of chunks we'll sort in the background thread; this is set to get 8 chunks
+    val chunkSize = 63 * sortBuffer.ioBuf.limit
 
     // A queue of requests we send to the thread; each one specifies a range in the buffer that
     // we're ready to sort (as record indices), except when we pass in (-1, -1) for the last one
@@ -353,7 +353,7 @@ object UnsafeSort extends Logging {
         val (s1, e1) = sortedRanges(2 * i)
         val (s2, e2) = sortedRanges(2 * i + 1)
         assert(e1 == s2)
-        // Merge the records from the two ranges into pointers2, then copy that back into pointers
+        // Merge the records from the two ranges into pointers2
         var i1 = s1
         var i2 = s2
         var pos = s1
@@ -386,7 +386,7 @@ object UnsafeSort extends Logging {
         newRanges += range
         System.arraycopy(pointers, range._1, pointers2, range._1, range._2 - range._1)
       }
-      var tmp = sortBuffer.pointers
+      val tmp = sortBuffer.pointers
       sortBuffer.pointers = sortBuffer.pointers2
       sortBuffer.pointers2 = tmp
       sortedRanges = newRanges
