@@ -268,7 +268,7 @@ object UnsafeSort extends Logging {
     val chunkSize = 25 * sortBuffer.ioBuf.limit
 
     // A queue of requests we send to the thread; each one specifies a range in the buffer that
-    // we're ready to sort (as record indices), except when we pass in null for the last one
+    // we're ready to sort (as record indices), except when we pass in (-1, -1) for the last one
     val sortRequests = new java.util.concurrent.LinkedBlockingQueue[(Int, Int)]
 
     // A set of sorted ranges we have in our buffer (specified as record indices); we use this to
@@ -279,7 +279,7 @@ object UnsafeSort extends Logging {
       override def run() {
         while (true) {
           val range = sortRequests.take()
-          if (range == null) {
+          if (range == (-1, -1)) {
             return
           }
           new Sorter(new LongArraySorter).sort(sortBuffer.pointers, range._1, range._2, ord)
@@ -333,7 +333,7 @@ object UnsafeSort extends Logging {
       }
     }
 
-    sortRequests.put(null)
+    sortRequests.put((-1, -1))
     backgroundThread.join()
 
     var timeTaken = System.currentTimeMillis() - startTime
