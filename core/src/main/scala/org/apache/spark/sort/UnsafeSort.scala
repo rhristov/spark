@@ -345,8 +345,9 @@ object UnsafeSort extends Logging {
     // Merge the sorted ranges, two by two, until we're down to one range
     startTime = System.currentTimeMillis()
     while (sortedRanges.size > 1) {
+      println("sorted ranges: " + sortedRanges.mkString(", "))
       val newRanges = new scala.collection.mutable.ArrayBuffer[(Int, Int)]
-      for (i <- 0 until sortedRanges.size / 2) {
+      for (i <- 0 until (sortedRanges.size - 1) / 2) {
         val (s1, e1) = sortedRanges(2 * i)
         val (s2, e2) = sortedRanges(2 * i + 1)
         assert(e1 == s2)
