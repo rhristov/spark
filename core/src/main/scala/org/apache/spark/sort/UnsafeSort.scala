@@ -374,7 +374,7 @@ object UnsafeSort extends Logging {
         }
         while (i2 < e2) {
           pointers2(pos) = pointers(i2)
-          i1 += 1
+          i2 += 1
           pos += 1
         }
         System.arraycopy(pointers2, 0, pointers, s1, pos)
