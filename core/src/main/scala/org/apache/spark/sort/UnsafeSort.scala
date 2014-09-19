@@ -178,7 +178,7 @@ object UnsafeSort extends Logging {
      *
      * i.e. the 4MB allocated here is not used at all. We are only the 4MB for tracking.
      */
-    val ioBuf: ByteBuffer = ByteBuffer.allocateDirect(4 * 1000 * 1000)
+    val ioBuf: ByteBuffer = ByteBuffer.allocateDirect(5 * 1000 * 1000)
 
     /** list of pointers to each block, used for sorting. */
     var pointers: Array[Long] = new Array[Long](capacity.toInt)
@@ -265,7 +265,7 @@ object UnsafeSort extends Logging {
     assert(sortBuffer.ioBuf.limit % 100 == 0)
 
     // Size of chunks we'll sort in the background thread; this is set to get 8 chunks
-    val chunkSize = 63 * sortBuffer.ioBuf.limit
+    val chunkSize = 50 * sortBuffer.ioBuf.limit
 
     // A queue of requests we send to the thread; each one specifies a range in the buffer that
     // we're ready to sort (as record indices), except when we pass in (-1, -1) for the last one
@@ -450,7 +450,6 @@ object UnsafeSort extends Logging {
       }
     }
   }
-
 
   private[spark]
   final class LongArraySorter extends SortDataFormat[Long, Array[Long]] {
