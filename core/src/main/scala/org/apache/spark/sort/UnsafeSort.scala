@@ -347,13 +347,13 @@ object UnsafeSort extends Logging {
     while (sortedRanges.size > 1) {
       println("sorted ranges: " + sortedRanges.mkString(", "))
       val newRanges = new scala.collection.mutable.ArrayBuffer[(Int, Int)]
+      val pointers = sortBuffer.pointers
+      val pointers2 = sortBuffer.pointers2
       for (i <- 0 until (sortedRanges.size - 1) / 2) {
         val (s1, e1) = sortedRanges(2 * i)
         val (s2, e2) = sortedRanges(2 * i + 1)
         assert(e1 == s2)
         // Merge the records from the two ranges into pointers2, then copy that back into pointers
-        val pointers = sortBuffer.pointers
-        val pointers2 = sortBuffer.pointers2
         var i1 = s1
         var i2 = s2
         var pos = 0
@@ -378,12 +378,17 @@ object UnsafeSort extends Logging {
           i2 += 1
           pos += 1
         }
-        System.arraycopy(pointers2, 0, pointers, s1, pos)
         newRanges += ((s1, e2))
       }
       if (sortedRanges.size % 2 == 1) {
-        newRanges += sortedRanges.last
+        // Copy in the last range unmodified
+        val range = sortedRanges.last
+        newRanges += range
+        System.arraycopy(pointers, range._1, pointers2, range._1, range._2 - range._1)
       }
+      var tmp = sortBuffer.pointers
+      sortBuffer.pointers = sortBuffer.pointers2
+      sortBuffer.pointers2 = tmp
       sortedRanges = newRanges
     }
 
