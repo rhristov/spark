@@ -353,10 +353,10 @@ object UnsafeSort extends Logging {
         val (s1, e1) = sortedRanges(2 * i)
         val (s2, e2) = sortedRanges(2 * i + 1)
         assert(e1 == s2)
-        // Merge the records from the two ranges into pointers2
+        // Merge the records from the two ranges into pointers2, then copy that back into pointers
         var i1 = s1
         var i2 = s2
-        var pos = s1
+        var pos = 0
         while (i1 < e1 && i2 < e2) {
           if (ord.compare(pointers(i1), pointers(i2)) < 0) {
             pointers2(pos) = pointers(i1)
@@ -378,17 +378,13 @@ object UnsafeSort extends Logging {
           i2 += 1
           pos += 1
         }
+        System.arraycopy(pointers2, 0, pointers, s1, pos)
         newRanges += ((s1, e2))
       }
       if (sortedRanges.size % 2 == 1) {
         // Copy in the last range unmodified
-        val range = sortedRanges.last
-        newRanges += range
-        System.arraycopy(pointers, range._1, pointers2, range._1, range._2 - range._1)
+        newRanges += sortedRanges.last
       }
-      val tmp = sortBuffer.pointers
-      sortBuffer.pointers = sortBuffer.pointers2
-      sortBuffer.pointers2 = tmp
       sortedRanges = newRanges
     }
 
