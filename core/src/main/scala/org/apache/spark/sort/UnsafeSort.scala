@@ -103,8 +103,9 @@ object UnsafeSort extends Logging {
       // Sort!!!
       {
         val startTime = System.currentTimeMillis
-        val sorter = new Sorter(new LongArraySorter).sort(
-          sortBuffer.pointers, 0, numRecords, ord)
+        //val sorter = new Sorter(new LongArraySorter).sort(
+        //  sortBuffer.pointers, 0, numRecords, ord)
+        radixSort(sortBuffer.pointers, 0, numRecords)
         val timeTaken = System.currentTimeMillis - startTime
         logInfo(s"Reduce: Sorting $numRecords records took $timeTaken ms")
         println(s"Reduce: Sorting $numRecords records took $timeTaken ms")
@@ -282,7 +283,8 @@ object UnsafeSort extends Logging {
           if (range == (-1, -1)) {
             return
           }
-          new Sorter(new LongArraySorter).sort(sortBuffer.pointers, range._1, range._2, ord)
+          //new Sorter(new LongArraySorter).sort(sortBuffer.pointers, range._1, range._2, ord)
+          radixSort(sortBuffer.pointers, range._1, range._2)
         }
       }
     }
@@ -428,23 +430,22 @@ object UnsafeSort extends Logging {
 
         val sortBuffer = sortBuffers.get()
 
-        /*
         readFileIntoBuffer(outputFile, sortBuffer)
         buildLongPointers(sortBuffer, fileSize)
 
         // Sort!!!
         {
           val startTime = System.currentTimeMillis
-          val sorter = new Sorter(new LongArraySorter).sort(
-            sortBuffer.pointers, 0, recordsPerPartition.toInt, ord)
+          //val sorter = new Sorter(new LongArraySorter).sort(
+          //  sortBuffer.pointers, 0, recordsPerPartition.toInt, ord)
+          radixSort(sortBuffer.pointers, 0, recordsPerPartition.toInt)
           val timeTaken = System.currentTimeMillis - startTime
           logInfo(s"Sorting $recordsPerPartition records took $timeTaken ms")
           println(s"Sorting $recordsPerPartition records took $timeTaken ms")
           scala.Console.flush()
         }
-        */
 
-        readFileAndSort(outputFile, sortBuffer)
+        //readFileAndSort(outputFile, sortBuffer)
 
         Iterator((recordsPerPartition, sortBuffer.pointers))
       }
