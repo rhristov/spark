@@ -103,9 +103,9 @@ object UnsafeSort extends Logging {
       // Sort!!!
       {
         val startTime = System.currentTimeMillis
-        //val sorter = new Sorter(new LongArraySorter).sort(
-        //  sortBuffer.pointers, 0, numRecords, ord)
-        radixSort(sortBuffer, 0, numRecords)
+        val sorter = new Sorter(new LongArraySorter).sort(
+          sortBuffer.pointers, 0, numRecords, ord)
+        //radixSort(sortBuffer, 0, numRecords) // This is slower than timsort if data partly sorted
         val timeTaken = System.currentTimeMillis - startTime
         logInfo(s"Reduce: Sorting $numRecords records took $timeTaken ms")
         println(s"Reduce: Sorting $numRecords records took $timeTaken ms")
@@ -283,8 +283,8 @@ object UnsafeSort extends Logging {
           if (range == (-1, -1)) {
             return
           }
-          new Sorter(new LongArraySorter).sort(sortBuffer.pointers, range._1, range._2, ord)
-          //radixSort(sortBuffer.pointers, range._1, range._2)  // TODO: ensure this supports sub-ranges
+          //new Sorter(new LongArraySorter).sort(sortBuffer.pointers, range._1, range._2, ord)
+          radixSort(sortBuffer, range._1, range._2)
         }
       }
     }
@@ -479,26 +479,23 @@ object UnsafeSort extends Logging {
     // Now move the longs around to sort them by each position
     j = KEY_LEN - 1
     while (j >= 0) {
-      // Skip this j if all the bytes are the same (useful in reduce tasks with similar keys)
-      if (counts(j).count(_ > 0) > 1) {
-        // Position at which we can insert the next record with a given value of byte j
-        val insertPos = Array.fill(256)(0)
-        insertPos(0) = start
-        for (b <- 1 until 256) {
-          insertPos(b) = insertPos(b - 1) + counts(j)(b - 1)
-        }
-        assert(insertPos(255) + counts(j)(255) == end)
-        var pos = start
-        while (pos < end) {
-          val b = UNSAFE.getByte(data(pos) + j) & 0xFF
-          data2(insertPos(b)) = data(pos)
-          pos += 1
-          insertPos(b) += 1
-        }
-        val tmp = data
-        data = data2
-        data2 = tmp
+      // Position at which we can insert the next record with a given value of byte j
+      val insertPos = Array.fill(256)(0)
+      insertPos(0) = start
+      for (b <- 1 until 256) {
+        insertPos(b) = insertPos(b - 1) + counts(j)(b - 1)
       }
+      assert(insertPos(255) + counts(j)(255) == end)
+      var pos = start
+      while (pos < end) {
+        val b = UNSAFE.getByte(data(pos) + j) & 0xFF
+        data2(insertPos(b)) = data(pos)
+        pos += 1
+        insertPos(b) += 1
+      }
+      val tmp = data
+      data = data2
+      data2 = tmp
       j -= 1
     }
 
@@ -511,8 +508,10 @@ object UnsafeSort extends Logging {
     }
     */
 
-    sortBuf.pointers = data
-    sortBuf.pointers2 = data2
+    if (sortBuf.pointers != data) {
+      // Shouldn't happen since we have an even key length, but nonetheless
+      System.arraycopy(data, start, sortBuf.pointers, start, end - start)
+    }
   }
 
   private[spark]
