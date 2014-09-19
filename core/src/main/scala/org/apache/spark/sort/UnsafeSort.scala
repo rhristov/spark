@@ -383,6 +383,7 @@ object UnsafeSort extends Logging {
       if (sortedRanges.size % 2 == 1) {
         newRanges += sortedRanges.last
       }
+      sortedRanges = newRanges
     }
 
     timeTaken = System.currentTimeMillis() - startTime
