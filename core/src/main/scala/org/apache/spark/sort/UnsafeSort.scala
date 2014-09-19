@@ -105,7 +105,7 @@ object UnsafeSort extends Logging {
         val startTime = System.currentTimeMillis
         //val sorter = new Sorter(new LongArraySorter).sort(
         //  sortBuffer.pointers, 0, numRecords, ord)
-        radixSort(sortBuffer.pointers, 0, numRecords)
+        radixSort(sortBuffer, 0, numRecords)
         val timeTaken = System.currentTimeMillis - startTime
         logInfo(s"Reduce: Sorting $numRecords records took $timeTaken ms")
         println(s"Reduce: Sorting $numRecords records took $timeTaken ms")
@@ -283,8 +283,8 @@ object UnsafeSort extends Logging {
           if (range == (-1, -1)) {
             return
           }
-          //new Sorter(new LongArraySorter).sort(sortBuffer.pointers, range._1, range._2, ord)
-          radixSort(sortBuffer.pointers, range._1, range._2)
+          new Sorter(new LongArraySorter).sort(sortBuffer.pointers, range._1, range._2, ord)
+          //radixSort(sortBuffer.pointers, range._1, range._2)  // TODO: ensure this supports sub-ranges
         }
       }
     }
@@ -438,7 +438,7 @@ object UnsafeSort extends Logging {
           val startTime = System.currentTimeMillis
           //val sorter = new Sorter(new LongArraySorter).sort(
           //  sortBuffer.pointers, 0, recordsPerPartition.toInt, ord)
-          radixSort(sortBuffer.pointers, 0, recordsPerPartition.toInt)
+          radixSort(sortBuffer, 0, recordsPerPartition.toInt)
           val timeTaken = System.currentTimeMillis - startTime
           logInfo(s"Sorting $recordsPerPartition records took $timeTaken ms")
           println(s"Sorting $recordsPerPartition records took $timeTaken ms")
@@ -452,11 +452,13 @@ object UnsafeSort extends Logging {
     }
   }
 
-  private def radixSort(data: Array[Long], start: Int, end: Int) {
+  private def radixSort(sortBuf: SortBuffer, start: Int, end: Int) {
     val KEY_LEN = 10
 
-    // Number of times each byte appears in each position in the key; used so that we can
-    // do the radix sort "in place" instead of allocating a new array
+    var data = sortBuf.pointers
+    var data2 = sortBuf.pointers2
+
+    // Number of times each byte appears in each position in the key
     val counts = Array.fill(KEY_LEN, 256)(0)
 
     var i = 0
@@ -478,39 +480,39 @@ object UnsafeSort extends Logging {
     j = KEY_LEN - 1
     while (j >= 0) {
       // Skip this j if all the bytes are the same (useful in reduce tasks with similar keys)
-      if (counts(j).count(_ != 0) > 1) {
+      if (counts(j).count(_ > 0) > 1) {
         // Position at which we can insert the next record with a given value of byte j
         val insertPos = Array.fill(256)(0)
         insertPos(0) = start
         for (b <- 1 until 256) {
-          insertPos(b) = insertPos(b - 1) + counts(j)(b)
+          insertPos(b) = insertPos(b - 1) + counts(j)(b - 1)
         }
-        val insertStart = insertPos.clone()
-        // Position of byte we're examining now; we will swap it with one at the right location
+        assert(insertPos(255) + counts(j)(255) == end)
         var pos = start
-        var curInsertRun = 0
         while (pos < end) {
           val b = UNSAFE.getByte(data(pos) + j) & 0xFF
-          val old = data(insertPos(b))
-          data(insertPos(b)) = data(pos)
-          data(pos) = old
+          data2(insertPos(b)) = data(pos)
+          pos += 1
           insertPos(b) += 1
-          // It's now possible that pos has ended up in an insert run, which means that we inserted
-          // ourselves in the run that was right before us; if so we need to advance pos, skipping
-          // any new insert runs we might find ourselves inside of
-          while (curInsertRun < 256 && pos < end &&
-              pos >= insertStart(curInsertRun) && pos < insertPos(curInsertRun)) {
-            pos += 1
-            if (curInsertRun < 255 && pos == insertPos(curInsertRun + 1)) {
-              // We've gotten into the next run, so update curInsertRun; note that there's no way
-              // future elements could fall into the previous run since we counted byte occurrences
-              curInsertRun += 1
-            }
-          }
         }
+        val tmp = data
+        data = data2
+        data2 = tmp
       }
       j -= 1
     }
+
+    /*
+    // Validate that the data is sorted
+    i = start
+    while (i < end - 1) {
+      assert(ord.compare(data(i), data(i + 1)) <= 0)
+      i += 1
+    }
+    */
+
+    sortBuf.pointers = data
+    sortBuf.pointers2 = data2
   }
 
   private[spark]
