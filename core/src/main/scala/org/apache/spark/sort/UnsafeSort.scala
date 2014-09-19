@@ -469,6 +469,7 @@ object UnsafeSort extends Logging {
       while (j < KEY_LEN) {
         val b = UNSAFE.getByte(data(i) + j) & 0xFF
         counts(j)(b) += 1
+        j += 1
       }
       i += 1
     }
