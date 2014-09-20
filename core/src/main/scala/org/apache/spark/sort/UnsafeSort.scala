@@ -268,8 +268,8 @@ object UnsafeSort extends Logging {
     assert(fileSize % 100 == 0)
     assert(sortBuffer.ioBuf.limit % 100 == 0)
 
-    // Size of chunks we'll sort in the background thread; this is set to get 8 chunks
-    val chunkSize = 50 * sortBuffer.ioBuf.limit
+    // Size of chunks we'll sort in the background thread; this is set to get 4 chunks
+    val chunkSize = 100 * sortBuffer.ioBuf.limit
 
     // A queue of requests we send to the thread; each one specifies a range in the buffer that
     // we're ready to sort (as record indices), except when we pass in (-1, -1) for the last one
