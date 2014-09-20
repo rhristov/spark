@@ -443,7 +443,7 @@ object UnsafeSort extends Logging {
           val startTime = System.currentTimeMillis
           //val sorter = new Sorter(new LongArraySorter).sort(
           //  sortBuffer.pointers, 0, recordsPerPartition.toInt, ord)
-          radixSort(sortBuffer, 0, recordsPerPartition.toInt)
+          sortWithKeys(sortBuffer, 0, recordsPerPartition.toInt)
           val timeTaken = System.currentTimeMillis - startTime
           logInfo(s"Sorting $recordsPerPartition records took $timeTaken ms")
           println(s"Sorting $recordsPerPartition records took $timeTaken ms")
