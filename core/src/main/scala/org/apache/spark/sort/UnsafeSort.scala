@@ -534,7 +534,7 @@ object UnsafeSort extends Logging {
     var i = 0
     while (i < end - start) {
       val index = (pointers(start + i) - baseAddress) / 100
-      assert(index >= 0L && index <= 0xFFFFFFFFL)
+      //assert(index >= 0L && index <= 0xFFFFFFFFL)
       val headBytes = // First 7 bytes
         reverseBytes(UNSAFE.getLong(pointers(start + i))) >>> 8
       val tailBytes = // Last 3 bytes
@@ -543,11 +543,9 @@ object UnsafeSort extends Logging {
       keys(2 * i + 1) = (tailBytes << 32) | index
       i += 1
     }
-    println("filled keys array")
 
     // Sort it
     new Sorter(new LongPairArraySorter).sort(keys, 0, end - start, longPairOrdering)
-    println("sorted stuff")
 
     // Fill back the pointers array
     i = 0
@@ -555,14 +553,15 @@ object UnsafeSort extends Logging {
       pointers(start + i) = baseAddress + (keys(2 * i + 1) & 0xFFFFFFFFL) * 100
       i += 1
     }
-    println("filled back pointers array")
 
+    /*
     // Validate that the data is sorted
     i = start
     while (i < end - 1) {
       assert(ord.compare(pointers(i), pointers(i + 1)) <= 0)
       i += 1
     }
+    */
   }
 
 
