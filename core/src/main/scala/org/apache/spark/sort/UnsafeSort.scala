@@ -103,9 +103,9 @@ object UnsafeSort extends Logging {
       // Sort!!!
       {
         val startTime = System.currentTimeMillis
-        val sorter = new Sorter(new LongArraySorter).sort(
-          sortBuffer.pointers, 0, numRecords, ord)
+        //val sorter = new Sorter(new LongArraySorter).sort(sortBuffer.pointers, 0, numRecords, ord)
         //radixSort(sortBuffer, 0, numRecords) // This is slower than timsort if data partly sorted
+        sortWithKeys(sortBuffer, 0, numRecords)
         val timeTaken = System.currentTimeMillis - startTime
         logInfo(s"Reduce: Sorting $numRecords records took $timeTaken ms")
         println(s"Reduce: Sorting $numRecords records took $timeTaken ms")
@@ -186,6 +186,9 @@ object UnsafeSort extends Logging {
 
     /** a second pointers array to facilitate merge-sort */
     var pointers2: Array[Long] = new Array[Long](capacity.toInt)
+
+    /** an array of 2 * capacity longs that we can use for records holding our keys */
+    val keys: Array[Long] = new Array[Long](2 * capacity.toInt)
 
     private[this] val ioBufAddressField = {
       val f = classOf[java.nio.Buffer].getDeclaredField("address")
@@ -284,7 +287,8 @@ object UnsafeSort extends Logging {
             return
           }
           //new Sorter(new LongArraySorter).sort(sortBuffer.pointers, range._1, range._2, ord)
-          radixSort(sortBuffer, range._1, range._2)
+          //radixSort(sortBuffer, range._1, range._2)
+          sortWithKeys(sortBuffer, range._1, range._2)
         }
       }
     }
@@ -516,68 +520,48 @@ object UnsafeSort extends Logging {
     }
   }
 
-  // A radix sort with base 256, i.e. per character. Seems slower than 16.
-  private def radixSort256(sortBuf: SortBuffer, start: Int, end: Int) {
-    val KEY_LEN = 10
+  // Sort a range of a SortBuffer using only the keys, then update the pointers field to match
+  // sorted order. Unlike the other sort methods, this copies the keys into an array of Longs
+  // (with 2 Longs per record in the buffer to capture the 10-byte key and its index) and sorts
+  // them without having to look up random locations in the original data on each comparison.
+  private def sortWithKeys(sortBuf: SortBuffer, start: Int, end: Int) {
+    val keys = sortBuf.keys
+    val pointers = sortBuf.pointers
+    val baseAddress = sortBuf.address
+    import java.lang.Long.reverseBytes
 
-    var data = sortBuf.pointers
-    var data2 = sortBuf.pointers2
-
-    // Number of times each byte appears in each position in the key
-    val counts = Array.fill(KEY_LEN, 256)(0)
-
+    // Fill in the keys array
     var i = 0
-    var j = 0
-
-    // Do a first pass to compute how many times each byte occurs in each position
-    i = start
-    while (i < end) {
-      j = 0
-      while (j < KEY_LEN) {
-        val b = UNSAFE.getByte(data(i) + j) & 0xFF
-        counts(j)(b) += 1
-        j += 1
-      }
+    while (i < end - start) {
+      val index = (pointers(start + i) - baseAddress) / 100
+      assert(index >= 0)
+      assert(index <= 0xFFFFFFFF)
+      val headBytes = // First 7 bytes
+        reverseBytes(UNSAFE.getLong(pointers(start + i))) >>> 8
+      val tailBytes = // Last 3 bytes
+        reverseBytes(UNSAFE.getLong(pointers(start + i)) + 7) >>> (8 * 5)
+      keys(2 * i) = headBytes
+      keys(2 * i + 1) = (tailBytes << 32) | index
       i += 1
     }
 
-    // Now move the longs around to sort them by each position
-    j = KEY_LEN - 1
-    while (j >= 0) {
-      // Position at which we can insert the next record with a given value of byte j
-      val insertPos = Array.fill(256)(0)
-      insertPos(0) = start
-      for (b <- 1 until 256) {
-        insertPos(b) = insertPos(b - 1) + counts(j)(b - 1)
-      }
-      assert(insertPos(255) + counts(j)(255) == end)
-      var pos = start
-      while (pos < end) {
-        val b = UNSAFE.getByte(data(pos) + j) & 0xFF
-        data2(insertPos(b)) = data(pos)
-        pos += 1
-        insertPos(b) += 1
-      }
-      val tmp = data
-      data = data2
-      data2 = tmp
-      j -= 1
+    // Sort it
+    new Sorter(new LongPairArraySorter).sort(keys, 0, start - end, longPairOrdering)
+
+    // Fill back the pointers array
+    i = 0
+    while (i < end - start) {
+      pointers(start + i) = baseAddress + (keys(2 * i + 1) & 0xFFFFFFFF) * 100
     }
 
-    /*
     // Validate that the data is sorted
     i = start
     while (i < end - 1) {
-      assert(ord.compare(data(i), data(i + 1)) <= 0)
+      assert(ord.compare(pointers(i), pointers(i + 1)) <= 0)
       i += 1
     }
-    */
-
-    if (sortBuf.pointers != data) {
-      // Shouldn't happen since we have an even key length, but nonetheless
-      System.arraycopy(data, start, sortBuf.pointers, start, end - start)
-    }
   }
+
 
   private[spark]
   final class LongArraySorter extends SortDataFormat[Long, Array[Long]] {
@@ -612,5 +596,59 @@ object UnsafeSort extends Logging {
      */
     override protected def allocate(length: Int): Array[Long] = new Array[Long](length)
   }
+
+  private[spark]
+  final class LongPairArraySorter extends SortDataFormat[(Long, Long), Array[Long]] {
+    /** Return the sort key for the element at the given index. */
+    override protected def getKey(data: Array[Long], pos: Int): (Long, Long) = {
+      (data(2 * pos), data(2 * pos + 1))
+    }
+
+    /** Swap two elements. */
+    override protected def swap(data: Array[Long], pos0: Int, pos1: Int) {
+      var tmp = data(2 * pos0)
+      data(2 * pos0) = data(2 * pos1)
+      data(2 * pos1) = tmp
+      tmp = data(2 * pos0 + 1)
+      data(2 * pos0 + 1) = data(2 * pos1 + 1)
+      data(2 * pos1 + 1) = tmp
+    }
+
+    /** Copy a single element from src(srcPos) to dst(dstPos). */
+    override protected def copyElement(src: Array[Long], srcPos: Int,
+                                       dst: Array[Long], dstPos: Int) {
+      dst(2 * dstPos) = src(2 * srcPos)
+      dst(2 * dstPos + 1) = src(2 * srcPos + 1)
+    }
+
+    /**
+     * Copy a range of elements starting at src(srcPos) to dst, starting at dstPos.
+     * Overlapping ranges are allowed.
+     */
+    override protected def copyRange(src: Array[Long], srcPos: Int,
+                                     dst: Array[Long], dstPos: Int, length: Int) {
+      System.arraycopy(src, 2 * srcPos, dst, 2 * dstPos, 2 * length)
+    }
+
+    /**
+     * Allocates a Buffer that can hold up to 'length' elements.
+     * All elements of the buffer should be considered invalid until data is explicitly copied in.
+     */
+    override protected def allocate(length: Int): Array[Long] = new Array[Long](2 * length)
+  }
+
+  private[spark]
+  final class LongPairOrdering extends Ordering[(Long, Long)] {
+    override def compare(left: (Long, Long), right: (Long, Long)): Int = {
+      val c1 = java.lang.Long.compare(left._1, right._1)
+      if (c1 != 0) {
+        c1
+      } else {
+        java.lang.Long.compare(left._2, right._2)
+      }
+    }
+  }
+
+  val longPairOrdering = new LongPairOrdering
 
 }
