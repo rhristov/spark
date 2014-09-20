@@ -552,7 +552,7 @@ object UnsafeSort extends Logging {
     // Fill back the pointers array
     i = 0
     while (i < end - start) {
-      pointers(start + i) = baseAddress + (keys(2 * i + 1) & 0xFFFFFFFF) * 100
+      pointers(start + i) = baseAddress + (keys(2 * i + 1) & 0xFFFFFFFFL) * 100
       i += 1
     }
     println("filled back pointers array")
