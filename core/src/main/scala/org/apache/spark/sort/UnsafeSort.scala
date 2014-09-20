@@ -546,7 +546,7 @@ object UnsafeSort extends Logging {
     println("filled keys array")
 
     // Sort it
-    new Sorter(new LongPairArraySorter).sort(keys, 0, start - end, longPairOrdering)
+    new Sorter(new LongPairArraySorter).sort(keys, 0, end - start, longPairOrdering)
     println("sorted stuff")
 
     // Fill back the pointers array
