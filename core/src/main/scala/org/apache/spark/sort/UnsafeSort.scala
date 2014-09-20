@@ -454,7 +454,70 @@ object UnsafeSort extends Logging {
     }
   }
 
+  // A radix sort with base 65536, i.e. per 2 bytes.
   private def radixSort(sortBuf: SortBuffer, start: Int, end: Int) {
+    val KEY_LEN = 5
+
+    var data = sortBuf.pointers
+    var data2 = sortBuf.pointers2
+
+    // Number of times each byte appears in each position in the key
+    val counts = Array.fill(KEY_LEN, 65536)(0)
+
+    var i = 0
+    var j = 0
+
+    // Do a first pass to compute how many times each byte occurs in each position
+    i = start
+    while (i < end) {
+      j = 0
+      while (j < KEY_LEN) {
+        val b = UNSAFE.getShort(data(i) + j + j) & 0xFFFF
+        counts(j)(b) += 1
+        j += 1
+      }
+      i += 1
+    }
+
+    // Now move the longs around to sort them by each position
+    j = KEY_LEN - 1
+    // Position at which we can insert the next record with a given value of byte j
+    val insertPos = Array.fill(65536)(0)
+    while (j >= 0) {
+      insertPos(0) = start
+      for (b <- 1 until 65536) {
+        insertPos(b) = insertPos(b - 1) + counts(j)(b - 1)
+      }
+      assert(insertPos(65535) + counts(j)(65535) == end)
+      var pos = start
+      while (pos < end) {
+        val b = UNSAFE.getShort(data(pos) + j + j) & 0xFFFF
+        data2(insertPos(b)) = data(pos)
+        pos += 1
+        insertPos(b) += 1
+      }
+      val tmp = data
+      data = data2
+      data2 = tmp
+      j -= 1
+    }
+
+    /*
+    // Validate that the data is sorted
+    i = start
+    while (i < end - 1) {
+      assert(ord.compare(data(i), data(i + 1)) <= 0)
+      i += 1
+    }
+    */
+
+    if (sortBuf.pointers != data) {
+      System.arraycopy(data, start, sortBuf.pointers, start, end - start)
+    }
+  }
+
+  // A radix sort with base 256, i.e. per character. Seems slower than 16.
+  private def radixSort256(sortBuf: SortBuffer, start: Int, end: Int) {
     val KEY_LEN = 10
 
     var data = sortBuf.pointers
