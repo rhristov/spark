@@ -552,6 +552,7 @@ object UnsafeSort extends Logging {
     i = 0
     while (i < end - start) {
       pointers(start + i) = baseAddress + (keys(2 * i + 1) & 0xFFFFFFFF) * 100
+      i += 1
     }
 
     // Validate that the data is sorted
