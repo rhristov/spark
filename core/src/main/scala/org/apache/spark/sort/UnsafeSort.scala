@@ -534,8 +534,8 @@ object UnsafeSort extends Logging {
     var i = 0
     while (i < end - start) {
       val index = (pointers(start + i) - baseAddress) / 100
-      assert(index >= 0)
-      assert(index <= 0xFFFFFFFF)
+      assert(index >= 0L)
+      assert(index <= 0xFFFFFFFFL)
       val headBytes = // First 7 bytes
         reverseBytes(UNSAFE.getLong(pointers(start + i))) >>> 8
       val tailBytes = // Last 3 bytes
