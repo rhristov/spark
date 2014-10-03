@@ -40,7 +40,8 @@ public class JavaSideDataTypeConversionSuite {
     checkDataType(DataType.BinaryType);
     checkDataType(DataType.BooleanType);
     checkDataType(DataType.TimestampType);
-    checkDataType(DataType.DecimalType);
+    checkDataType(new DecimalType());
+    checkDataType(new DecimalType(10, 4));
     checkDataType(DataType.DoubleType);
     checkDataType(DataType.FloatType);
     checkDataType(DataType.ByteType);
@@ -58,7 +59,7 @@ public class JavaSideDataTypeConversionSuite {
 
     // Simple StructType.
     List<StructField> simpleFields = new ArrayList<StructField>();
-    simpleFields.add(DataType.createStructField("a", DataType.DecimalType, false));
+    simpleFields.add(DataType.createStructField("a", new DecimalType(), false));
     simpleFields.add(DataType.createStructField("b", DataType.BooleanType, true));
     simpleFields.add(DataType.createStructField("c", DataType.LongType, true));
     simpleFields.add(DataType.createStructField("d", DataType.BinaryType, false));
@@ -127,7 +128,7 @@ public class JavaSideDataTypeConversionSuite {
     // StructType
     try {
       List<StructField> simpleFields = new ArrayList<StructField>();
-      simpleFields.add(DataType.createStructField("a", DataType.DecimalType, false));
+      simpleFields.add(DataType.createStructField("a", new DecimalType(), false));
       simpleFields.add(DataType.createStructField("b", DataType.BooleanType, true));
       simpleFields.add(DataType.createStructField("c", DataType.LongType, true));
       simpleFields.add(null);
@@ -137,7 +138,7 @@ public class JavaSideDataTypeConversionSuite {
     }
     try {
       List<StructField> simpleFields = new ArrayList<StructField>();
-      simpleFields.add(DataType.createStructField("a", DataType.DecimalType, false));
+      simpleFields.add(DataType.createStructField("a", new DecimalType(), false));
       simpleFields.add(DataType.createStructField("a", DataType.BooleanType, true));
       simpleFields.add(DataType.createStructField("c", DataType.LongType, true));
       DataType.createStructType(simpleFields);

@@ -105,7 +105,7 @@ private[thriftserver] class SparkSQLOperationManager(hiveContext: HiveContext)
             to.addColumnValue(ColumnValue.doubleValue(from.getDouble(ordinal)))
           case FloatType =>
             to.addColumnValue(ColumnValue.floatValue(from.getFloat(ordinal)))
-          case DecimalType =>
+          case DecimalType() =>
             val hiveDecimal = from.get(ordinal).asInstanceOf[BigDecimal].bigDecimal
             to.addColumnValue(ColumnValue.stringValue(new HiveDecimal(hiveDecimal)))
           case LongType =>
@@ -138,7 +138,7 @@ private[thriftserver] class SparkSQLOperationManager(hiveContext: HiveContext)
             to.addColumnValue(ColumnValue.doubleValue(null))
           case FloatType =>
             to.addColumnValue(ColumnValue.floatValue(null))
-          case DecimalType =>
+          case DecimalType() =>
             to.addColumnValue(ColumnValue.stringValue(null: HiveDecimal))
           case LongType =>
             to.addColumnValue(ColumnValue.longValue(null))
