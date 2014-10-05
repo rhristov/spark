@@ -26,6 +26,7 @@ import org.apache.hadoop.{io => hadoopIo}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.types
 import org.apache.spark.sql.catalyst.types._
+import org.apache.spark.sql.catalyst.types.decimal.Decimal
 
 /* Implicit conversions */
 import scala.collection.JavaConversions._
@@ -97,7 +98,7 @@ private[hive] trait HiveInspectors {
     }
     case d: hiveIo.DateWritable => d.get
     case t: hiveIo.TimestampWritable => t.getTimestamp
-    case b: hiveIo.HiveDecimalWritable => BigDecimal(b.getHiveDecimal().bigDecimalValue())
+    case b: hiveIo.HiveDecimalWritable => Decimal(b.getHiveDecimal().bigDecimalValue())
     case list: java.util.List[_] => list.map(unwrap)
     case map: java.util.Map[_,_] => map.map { case (k, v) => (unwrap(k), unwrap(v)) }.toMap
     case array: Array[_] => array.map(unwrap).toSeq
@@ -109,7 +110,7 @@ private[hive] trait HiveInspectors {
     case p: java.lang.Byte => p
     case p: java.lang.Boolean => p
     case str: String => str
-    case p: java.math.BigDecimal => p
+    case p: java.math.BigDecimal => Decimal(p)
     case p: Array[Byte] => p
     case p: java.sql.Date => p
     case p: java.sql.Timestamp => p
@@ -119,7 +120,7 @@ private[hive] trait HiveInspectors {
     case hvoi: HiveVarcharObjectInspector =>
       if (data == null) null else hvoi.getPrimitiveJavaObject(data).getValue
     case hdoi: HiveDecimalObjectInspector =>
-      if (data == null) null else BigDecimal(hdoi.getPrimitiveJavaObject(data).bigDecimalValue())
+      if (data == null) null else Decimal(hdoi.getPrimitiveJavaObject(data).bigDecimalValue())
     case pi: PrimitiveObjectInspector => pi.getPrimitiveJavaObject(data)
     case li: ListObjectInspector =>
       Option(li.getList(data))
@@ -150,6 +151,7 @@ private[hive] trait HiveInspectors {
     case l: Short => l: java.lang.Short
     case l: Byte => l: java.lang.Byte
     case b: BigDecimal => HiveShim.createDecimal(b.underlying())
+    case d: BigDecimal => HiveShim.createDecimal(d.toBigDecimal.underlying())
     case b: Array[Byte] => b
     case d: java.sql.Date => d
     case t: java.sql.Timestamp => t
