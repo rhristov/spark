@@ -77,6 +77,8 @@ case class AllDataTypesWithNonPrimitiveType(
 
 case class BinaryData(binaryData: Array[Byte])
 
+case class NumericData(i: Int, d: Double)
+
 class ParquetQuerySuite extends QueryTest with FunSuiteLike with BeforeAndAfterAll {
   TestData // Load test data tables.
 
@@ -810,6 +812,37 @@ class ParquetQuerySuite extends QueryTest with FunSuiteLike with BeforeAndAfterA
     (fromCaseClassString, fromJson).zipped.foreach { (a, b) =>
       assert(a.name == b.name)
       assert(a.dataType === b.dataType)
+    }
+  }
+
+  test("read/write fixed-length decimals") {
+    for ((precision, scale) <- Seq((5, 2), (1, 0), (1, 1), (18, 10), (18, 17))) {
+      val tempDir = getTempFilePath("parquetTest").getCanonicalPath
+      val data = sparkContext.parallelize(0 to 1000)
+        .map(i => NumericData(i, i / 100.0))
+        .select('i, 'd cast DecimalType(precision, scale))
+      data.saveAsParquetFile(tempDir)
+      checkAnswer(parquetFile(tempDir), data.toSchemaRDD.collect().toSeq)
+    }
+
+    // Decimals with precision above 18 are not yet supported
+    intercept[RuntimeException] {
+      val tempDir = getTempFilePath("parquetTest").getCanonicalPath
+      val data = sparkContext.parallelize(0 to 1000)
+        .map(i => NumericData(i, i / 100.0))
+        .select('i, 'd cast DecimalType(19, 10))
+      data.saveAsParquetFile(tempDir)
+      checkAnswer(parquetFile(tempDir), data.toSchemaRDD.collect().toSeq)
+    }
+
+    // Unlimited-length decimals are not yet supported
+    intercept[RuntimeException] {
+      val tempDir = getTempFilePath("parquetTest").getCanonicalPath
+      val data = sparkContext.parallelize(0 to 1000)
+        .map(i => NumericData(i, i / 100.0))
+        .select('i, 'd cast DecimalType.Unlimited)
+      data.saveAsParquetFile(tempDir)
+      checkAnswer(parquetFile(tempDir), data.toSchemaRDD.collect().toSeq)
     }
   }
 }

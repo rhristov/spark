@@ -358,7 +358,7 @@ case class DecimalType(precisionInfo: Option[PrecisionInfo]) extends FractionalT
   private[sql] val asIntegral = Decimal.DecimalAsIfIntegral
 
   def simpleString: String = precisionInfo match {
-    case Some(PrecisionInfo(precision, scale)) => s"decimal($precision, $scale})"
+    case Some(PrecisionInfo(precision, scale)) => s"decimal($precision, $scale)"
     case None => "decimal"
   }
 

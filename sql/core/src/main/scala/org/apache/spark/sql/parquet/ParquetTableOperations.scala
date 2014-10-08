@@ -363,14 +363,14 @@ private[parquet] class FilteringParquetRowInputFormat
       inputSplit: InputSplit,
       taskAttemptContext: TaskAttemptContext): RecordReader[Void, Row] = {
     val readSupport: ReadSupport[Row] = new RowReadSupport()
-
     val filterExpressions =
       ParquetFilters.deserializeFilterExpressions(ContextUtil.getConfiguration(taskAttemptContext))
-    if (filterExpressions.length > 0) {
+    if (filterExpressions != null) {
       logInfo(s"Pushing down predicates for RecordFilter: ${filterExpressions.mkString(", ")}")
-      new ParquetRecordReader[Row](
-        readSupport,
-        ParquetFilters.createRecordFilter(filterExpressions))
+    }
+    val filter = ParquetFilters.createRecordFilter(filterExpressions)
+    if (filter != null) {
+      new ParquetRecordReader[Row](readSupport, filter)
     } else {
       new ParquetRecordReader[Row](readSupport)
     }
@@ -450,8 +450,8 @@ private[parquet] class FilteringParquetRowInputFormat
         globalMetaData.getKeyValueMetaData(),
         globalMetaData.getSchema()))
 
-    val generateSplits =
-      classOf[ParquetInputFormat[_]].getDeclaredMethods.find(_.getName == "generateSplits").get
+    val cls = Class.forName("parquet.hadoop.ClientSideMetadataSplitStrategy")
+    val generateSplits = cls.getDeclaredMethods.find(_.getName == "generateSplits").get
     generateSplits.setAccessible(true)
 
     for (footer <- footers) {
@@ -468,17 +468,18 @@ private[parquet] class FilteringParquetRowInputFormat
           def call(): Array[BlockLocation] = fs.getFileBlockLocations(status, 0, status.getLen)
         })
       }
-      splits.addAll(
-        generateSplits.invoke(
-          null,
-          blocks,
-          blockLocations,
-          status,
-          parquetMetaData.getFileMetaData,
-          readContext.getRequestedSchema.toString,
-          readContext.getReadSupportMetadata,
-          minSplitSize,
-          maxSplitSize).asInstanceOf[JList[ParquetInputSplit]])
+      if (blocks.size() > 0) {
+        splits.addAll(
+          generateSplits.invoke(
+            null,
+            blocks,
+            blockLocations,
+            status,
+            readContext.getRequestedSchema.toString,
+            readContext.getReadSupportMetadata,
+            minSplitSize,
+            maxSplitSize).asInstanceOf[JList[ParquetInputSplit]])
+      }
     }
 
     splits
