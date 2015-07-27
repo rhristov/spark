@@ -70,6 +70,8 @@ class GroupedData protected[sql](
     groupingExprs: Seq[Expression],
     private val groupType: GroupedData.GroupType) {
 
+  private[sql] def dataFrame: DataFrame = df
+
   private[this] def toDF(aggExprs: Seq[Expression]): DataFrame = {
     val aggregates = if (df.sqlContext.conf.dataFrameRetainGroupColumns) {
       groupingExprs ++ aggExprs

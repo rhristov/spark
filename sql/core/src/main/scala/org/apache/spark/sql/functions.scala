@@ -148,6 +148,11 @@ object functions {
   def sum(columnName: String): Column = sum(Column(columnName))
 
   /**
+   * Typed aggregate function
+   */
+  def sum[T, R: Encoder](func: T => R) = new TypedSum[T, R](func)
+
+  /**
    * Aggregate function: returns the sum of distinct values in the expression.
    *
    * @group agg_funcs
