@@ -836,7 +836,7 @@ class DAGScheduler(
       clearCacheLocs()
       logInfo("Got job %s (%s) with %d output partitions".format(
         job.jobId, callSite.shortForm, partitions.length))
-      logInfo("Final stage: " + finalStage + "(" + finalStage.name + ")")
+      logInfo("Final stage: " + finalStage + " (" + finalStage.name + ")")
       logInfo("Parents of final stage: " + finalStage.parents)
       logInfo("Missing parents: " + getMissingParentStages(finalStage))
       val jobSubmissionTime = clock.getTimeMillis()
@@ -875,7 +875,7 @@ class DAGScheduler(
       clearCacheLocs()
       logInfo("Got map stage job %s (%s) with %d output partitions".format(
         jobId, callSite.shortForm, dependency.rdd.partitions.size))
-      logInfo("Final stage: " + finalStage + "(" + finalStage.name + ")")
+      logInfo("Final stage: " + finalStage + " (" + finalStage.name + ")")
       logInfo("Parents of final stage: " + finalStage.parents)
       logInfo("Missing parents: " + getMissingParentStages(finalStage))
 

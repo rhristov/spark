@@ -1984,7 +1984,6 @@ class SparkContext(config: SparkConf) extends Logging with ExecutorAllocationCli
       dependency,
       callSite,
       localProperties.get)
-    // TODO: It's not nice that we use JobWaiter here, but that's what SimpleFutureAction takes
     new SimpleFutureAction(waiter, env.mapOutputTracker.getStatistics(
       dependency.shuffleId, dependency.partitioner.numPartitions))
   }
