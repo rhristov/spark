@@ -31,14 +31,10 @@ import io.netty.buffer.ByteBufInputStream;
 public final class NettyManagedBuffer extends ManagedBuffer {
   private final ByteBuf buf;
 
-  public NettyManagedBuffer(ByteBuf buf) {
-    this.buf = buf;
-  }
+  public NettyManagedBuffer(ByteBuf buf) { this.buf = buf; }
 
   @Override
-  public long size() {
-    return buf.readableBytes();
-  }
+  public long size() { return buf.readableBytes(); }
 
   @Override
   public ByteBuffer nioByteBuffer() throws IOException {
@@ -72,5 +68,10 @@ public final class NettyManagedBuffer extends ManagedBuffer {
     return Objects.toStringHelper(this)
       .add("buf", buf)
       .toString();
+  }
+
+  @Override
+  public ManagedBuffer slice(long left, long size) {
+    return new NettyManagedBuffer(buf.slice((int)left, (int)size));
   }
 }

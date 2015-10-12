@@ -18,7 +18,9 @@
 package org.apache.spark.network.protocol;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
+import java.util.List;
 
 import com.google.common.base.Preconditions;
 import io.netty.buffer.ByteBuf;

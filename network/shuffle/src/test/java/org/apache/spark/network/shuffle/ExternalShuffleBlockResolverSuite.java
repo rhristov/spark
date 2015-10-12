@@ -66,7 +66,7 @@ public class ExternalShuffleBlockResolverSuite {
     ExternalShuffleBlockResolver resolver = new ExternalShuffleBlockResolver(conf, null);
     // Unregistered executor
     try {
-      resolver.getBlockData("app0", "exec1", "shuffle_1_1_0");
+      resolver.getBlockData("app0", "exec1", "shuffle_1_1_0_1");
       fail("Should have failed");
     } catch (RuntimeException e) {
       assertTrue("Bad error message: " + e, e.getMessage().contains("not registered"));
@@ -75,7 +75,7 @@ public class ExternalShuffleBlockResolverSuite {
     // Invalid shuffle manager
     resolver.registerExecutor("app0", "exec2", dataContext.createExecutorInfo("foobar"));
     try {
-      resolver.getBlockData("app0", "exec2", "shuffle_1_1_0");
+      resolver.getBlockData("app0", "exec2", "shuffle_1_1_0_1");
       fail("Should have failed");
     } catch (UnsupportedOperationException e) {
       // pass
@@ -85,7 +85,7 @@ public class ExternalShuffleBlockResolverSuite {
     resolver.registerExecutor("app0", "exec3",
       dataContext.createExecutorInfo("org.apache.spark.shuffle.sort.SortShuffleManager"));
     try {
-      resolver.getBlockData("app0", "exec3", "shuffle_1_1_0");
+      resolver.getBlockData("app0", "exec3", "shuffle_1_1_0_1");
       fail("Should have failed");
     } catch (Exception e) {
       // pass
@@ -99,13 +99,13 @@ public class ExternalShuffleBlockResolverSuite {
       dataContext.createExecutorInfo("org.apache.spark.shuffle.sort.SortShuffleManager"));
 
     InputStream block0Stream =
-      resolver.getBlockData("app0", "exec0", "shuffle_0_0_0").createInputStream();
+      resolver.getBlockData("app0", "exec0", "shuffle_0_0_0_1")._1().createInputStream();
     String block0 = CharStreams.toString(new InputStreamReader(block0Stream));
     block0Stream.close();
     assertEquals(sortBlock0, block0);
 
     InputStream block1Stream =
-      resolver.getBlockData("app0", "exec0", "shuffle_0_0_1").createInputStream();
+      resolver.getBlockData("app0", "exec0", "shuffle_0_0_1_2")._1().createInputStream();
     String block1 = CharStreams.toString(new InputStreamReader(block1Stream));
     block1Stream.close();
     assertEquals(sortBlock1, block1);
@@ -118,13 +118,13 @@ public class ExternalShuffleBlockResolverSuite {
       dataContext.createExecutorInfo("org.apache.spark.shuffle.hash.HashShuffleManager"));
 
     InputStream block0Stream =
-      resolver.getBlockData("app0", "exec0", "shuffle_1_0_0").createInputStream();
+      resolver.getBlockData("app0", "exec0", "shuffle_1_0_0_1")._1().createInputStream();
     String block0 = CharStreams.toString(new InputStreamReader(block0Stream));
     block0Stream.close();
     assertEquals(hashBlock0, block0);
 
     InputStream block1Stream =
-      resolver.getBlockData("app0", "exec0", "shuffle_1_0_1").createInputStream();
+      resolver.getBlockData("app0", "exec0", "shuffle_1_0_1_2")._1().createInputStream();
     String block1 = CharStreams.toString(new InputStreamReader(block1Stream));
     block1Stream.close();
     assertEquals(hashBlock1, block1);

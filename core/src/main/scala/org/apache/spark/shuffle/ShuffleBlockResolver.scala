@@ -21,6 +21,8 @@ import java.nio.ByteBuffer
 import org.apache.spark.network.buffer.ManagedBuffer
 import org.apache.spark.storage.ShuffleBlockId
 
+import scala.collection.mutable.ArrayBuffer
+
 private[spark]
 /**
  * Implementers of this trait understand how to retrieve block data for a logical shuffle block
@@ -35,7 +37,7 @@ trait ShuffleBlockResolver {
    * Retrieve the data for the specified block. If the data for that block is not available,
    * throws an unspecified exception.
    */
-  def getBlockData(blockId: ShuffleBlockId): ManagedBuffer
+  def getBlockData(blockId: ShuffleBlockId): (ManagedBuffer, Seq[Long])
 
   def stop(): Unit
 }

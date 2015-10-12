@@ -19,6 +19,7 @@ package org.apache.spark.network.sasl;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.google.common.collect.Lists;
@@ -197,7 +198,7 @@ public class SaslIntegrationSuite {
 
       BlockFetchingListener listener = new BlockFetchingListener() {
         @Override
-        public synchronized void onBlockFetchSuccess(String blockId, ManagedBuffer data) {
+        public synchronized void onBlockFetchSuccess(String blockId, ManagedBuffer data, List<Long> sizes) {
           notifyAll();
         }
 
@@ -241,7 +242,7 @@ public class SaslIntegrationSuite {
 
       ChunkReceivedCallback callback = new ChunkReceivedCallback() {
         @Override
-        public synchronized void onSuccess(int chunkIndex, ManagedBuffer buffer) {
+        public synchronized void onSuccess(int chunkIndex, ManagedBuffer buffer, List<Long> sizes) {
           notifyAll();
         }
 

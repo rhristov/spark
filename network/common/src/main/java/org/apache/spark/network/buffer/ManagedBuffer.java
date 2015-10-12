@@ -68,4 +68,6 @@ public abstract class ManagedBuffer {
    * Convert the buffer into an Netty object, used to write the data out.
    */
   public abstract Object convertToNetty() throws IOException;
+
+  public abstract ManagedBuffer slice(long left, long right);
 }

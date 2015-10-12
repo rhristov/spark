@@ -23,6 +23,9 @@ import io.netty.buffer.ByteBuf;
 import org.apache.spark.network.buffer.ManagedBuffer;
 import org.apache.spark.network.buffer.NettyManagedBuffer;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Response to {@link ChunkFetchRequest} when a chunk exists and has been successfully fetched.
  *
@@ -33,10 +36,12 @@ import org.apache.spark.network.buffer.NettyManagedBuffer;
 public final class ChunkFetchSuccess implements ResponseMessage {
   public final StreamChunkId streamChunkId;
   public final ManagedBuffer buffer;
+  public final List<Long> sizes;
 
-  public ChunkFetchSuccess(StreamChunkId streamChunkId, ManagedBuffer buffer) {
+  public ChunkFetchSuccess(StreamChunkId streamChunkId, ManagedBuffer buffer, List<Long> sizes) {
     this.streamChunkId = streamChunkId;
     this.buffer = buffer;
+    this.sizes = sizes;
   }
 
   @Override
@@ -44,21 +49,31 @@ public final class ChunkFetchSuccess implements ResponseMessage {
 
   @Override
   public int encodedLength() {
-    return streamChunkId.encodedLength();
+    return streamChunkId.encodedLength() + 8 * (sizes.size() + 1);
   }
 
   /** Encoding does NOT include 'buffer' itself. See {@link MessageEncoder}. */
   @Override
   public void encode(ByteBuf buf) {
     streamChunkId.encode(buf);
+    buf.writeLong(sizes.size());
+    for (Long el : sizes) {
+      buf.writeLong(el);
+    }
+    // write my sizes array here
   }
 
   /** Decoding uses the given ByteBuf as our data, and will retain() it. */
   public static ChunkFetchSuccess decode(ByteBuf buf) {
     StreamChunkId streamChunkId = StreamChunkId.decode(buf);
+    long listLength = buf.readLong();
+    List<Long> sizes = new ArrayList<Long>();
+    for (long i = 0; i < listLength; i++) {
+      sizes.add(buf.readLong());
+    }
     buf.retain();
     NettyManagedBuffer managedBuf = new NettyManagedBuffer(buf.duplicate());
-    return new ChunkFetchSuccess(streamChunkId, managedBuf);
+    return new ChunkFetchSuccess(streamChunkId, managedBuf, sizes);
   }
 
   @Override

@@ -198,6 +198,7 @@ abstract class DeserializationStream {
   def asKeyValueIterator: Iterator[(Any, Any)] = new NextIterator[(Any, Any)] {
     override protected def getNext() = {
       try {
+        //println("out")
         (readKey[Any](), readValue[Any]())
       } catch {
         case eof: EOFException => {

@@ -127,7 +127,7 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
         resp.buffer.release();
       } else {
         outstandingFetches.remove(resp.streamChunkId);
-        listener.onSuccess(resp.streamChunkId.chunkIndex, resp.buffer);
+        listener.onSuccess(resp.streamChunkId.chunkIndex, resp.buffer, resp.sizes);
         resp.buffer.release();
       }
     } else if (message instanceof ChunkFetchFailure) {

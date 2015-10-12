@@ -20,12 +20,7 @@ package org.apache.spark.network;
 import java.io.File;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
@@ -67,7 +62,7 @@ public class ChunkFetchIntegrationSuite {
 
   @BeforeClass
   public static void setUp() throws Exception {
-    int bufSize = 100000;
+    final int bufSize = 100000;
     final ByteBuffer buf = ByteBuffer.allocate(bufSize);
     for (int i = 0; i < bufSize; i ++) {
       buf.put((byte) i);
@@ -88,12 +83,12 @@ public class ChunkFetchIntegrationSuite {
 
     streamManager = new StreamManager() {
       @Override
-      public ManagedBuffer getChunk(long streamId, int chunkIndex) {
+      public scala.Tuple2 getChunk(long streamId, int chunkIndex) {
         assertEquals(STREAM_ID, streamId);
         if (chunkIndex == BUFFER_CHUNK_INDEX) {
-          return new NioManagedBuffer(buf);
+          return new scala.Tuple2(new NioManagedBuffer(buf), Arrays.asList(bufSize));
         } else if (chunkIndex == FILE_CHUNK_INDEX) {
-          return new FileSegmentManagedBuffer(conf, testFile, 10, testFile.length() - 25);
+          return new scala.Tuple2(new FileSegmentManagedBuffer(conf, testFile, 10, testFile.length() - 25), Arrays.asList(testFile.length() - 25));
         } else {
           throw new IllegalArgumentException("Invalid chunk index: " + chunkIndex);
         }
@@ -145,7 +140,7 @@ public class ChunkFetchIntegrationSuite {
 
     ChunkReceivedCallback callback = new ChunkReceivedCallback() {
       @Override
-      public void onSuccess(int chunkIndex, ManagedBuffer buffer) {
+      public void onSuccess(int chunkIndex, ManagedBuffer buffer, List<Long> sizes) {
         buffer.retain();
         res.successChunks.add(chunkIndex);
         res.buffers.add(buffer);

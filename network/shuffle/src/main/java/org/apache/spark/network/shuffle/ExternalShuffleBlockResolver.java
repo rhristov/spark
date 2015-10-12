@@ -44,6 +44,7 @@ import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo;
 import org.apache.spark.network.util.JavaUtils;
 import org.apache.spark.network.util.NettyUtils;
 import org.apache.spark.network.util.TransportConf;
+import scala.Tuple2;
 
 /**
  * Manages converting shuffle BlockIds into physical segments of local files, from a process outside
@@ -166,16 +167,17 @@ public class ExternalShuffleBlockResolver {
    * format "shuffle_ShuffleId_MapId_ReduceId" (from ShuffleBlockId), and additionally make
    * assumptions about how the hash and sort based shuffles store their data.
    */
-  public ManagedBuffer getBlockData(String appId, String execId, String blockId) {
+  public Tuple2<ManagedBuffer, List<Long>> getBlockData(String appId, String execId, String blockId) {
     String[] blockIdParts = blockId.split("_");
-    if (blockIdParts.length < 4) {
+    if (blockIdParts.length < 5) {
       throw new IllegalArgumentException("Unexpected block id format: " + blockId);
     } else if (!blockIdParts[0].equals("shuffle")) {
       throw new IllegalArgumentException("Expected shuffle block id, got: " + blockId);
     }
     int shuffleId = Integer.parseInt(blockIdParts[1]);
     int mapId = Integer.parseInt(blockIdParts[2]);
-    int reduceId = Integer.parseInt(blockIdParts[3]);
+    int startPartition = Integer.parseInt(blockIdParts[3]);
+    int endPartition = Integer.parseInt(blockIdParts[4]);
 
     ExecutorShuffleInfo executor = executors.get(new AppExecId(appId, execId));
     if (executor == null) {
@@ -187,7 +189,7 @@ public class ExternalShuffleBlockResolver {
       return getHashBasedShuffleBlockData(executor, blockId);
     } else if ("org.apache.spark.shuffle.sort.SortShuffleManager".equals(executor.shuffleManager)
       || "org.apache.spark.shuffle.unsafe.UnsafeShuffleManager".equals(executor.shuffleManager)) {
-      return getSortBasedShuffleBlockData(executor, shuffleId, mapId, reduceId);
+      return getSortBasedShuffleBlockData(executor, shuffleId, mapId, startPartition, endPartition);
     } else {
       throw new UnsupportedOperationException(
         "Unsupported shuffle manager: " + executor.shuffleManager);
@@ -255,33 +257,44 @@ public class ExternalShuffleBlockResolver {
    * Hash-based shuffle data is simply stored as one file per block.
    * This logic is from FileShuffleBlockResolver.
    */
-  private ManagedBuffer getHashBasedShuffleBlockData(ExecutorShuffleInfo executor, String blockId) {
-    File shuffleFile = getFile(executor.localDirs, executor.subDirsPerLocalDir, blockId);
-    return new FileSegmentManagedBuffer(conf, shuffleFile, 0, shuffleFile.length());
+  private Tuple2<ManagedBuffer, List<Long>> getHashBasedShuffleBlockData(ExecutorShuffleInfo executor, String blockId) {
+    File shuffleFile = getFile(executor.localDirs, executor.subDirsPerLocalDir, blockId + ".data");
+    return new Tuple2(new FileSegmentManagedBuffer(conf, shuffleFile, 0, shuffleFile.length()), Arrays.asList(shuffleFile.length()));
   }
 
   /**
-   * Sort-based shuffle data uses an index called "shuffle_ShuffleId_MapId_0.index" into a data file
-   * called "shuffle_ShuffleId_MapId_0.data". This logic is from IndexShuffleBlockResolver,
+   * Sort-based shuffle data uses an index called "shuffle_ShuffleId_MapId.index" into a data file
+   * called "shuffle_ShuffleId_MapId.data". This logic is from IndexShuffleBlockResolver,
    * and the block id format is from ShuffleDataBlockId and ShuffleIndexBlockId.
    */
-  private ManagedBuffer getSortBasedShuffleBlockData(
-    ExecutorShuffleInfo executor, int shuffleId, int mapId, int reduceId) {
+  private Tuple2<ManagedBuffer, List<Long>> getSortBasedShuffleBlockData(
+    ExecutorShuffleInfo executor, int shuffleId, int mapId, int startPartition, int endPartition) {
     File indexFile = getFile(executor.localDirs, executor.subDirsPerLocalDir,
-      "shuffle_" + shuffleId + "_" + mapId + "_0.index");
+      "shuffle_" + shuffleId + "_" + mapId + ".index");
 
     DataInputStream in = null;
     try {
+      List<Long> sizes = new ArrayList<Long>();
+
       in = new DataInputStream(new FileInputStream(indexFile));
-      in.skipBytes(reduceId * 8);
+      in.skipBytes(startPartition * 8);
       long offset = in.readLong();
-      long nextOffset = in.readLong();
-      return new FileSegmentManagedBuffer(
+      long nextOffset = offset;
+      long part = startPartition;
+
+      while (part != endPartition) {
+        long currentOffset = in.readLong();
+        sizes.add(currentOffset - nextOffset);
+        part ++;
+
+        nextOffset = currentOffset;
+      }
+      return new Tuple2(new FileSegmentManagedBuffer(
         conf,
         getFile(executor.localDirs, executor.subDirsPerLocalDir,
-          "shuffle_" + shuffleId + "_" + mapId + "_0.data"),
+          "shuffle_" + shuffleId + "_" + mapId + ".data"),
         offset,
-        nextOffset - offset);
+        nextOffset - offset), sizes);
     } catch (IOException e) {
       throw new RuntimeException("Failed to open file: " + indexFile, e);
     } finally {

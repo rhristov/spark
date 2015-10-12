@@ -30,6 +30,8 @@ import org.apache.spark.network.shuffle.protocol.{BlockTransferMessage, OpenBloc
 import org.apache.spark.serializer.Serializer
 import org.apache.spark.storage.{BlockId, StorageLevel}
 
+import scala.collection.mutable.ArrayBuffer
+
 /**
  * Serves requests to open blocks by simply registering one chunk per block requested.
  * Handles opening and uploading arbitrary BlockManager blocks.
@@ -54,9 +56,9 @@ class NettyBlockRpcServer(
 
     message match {
       case openBlocks: OpenBlocks =>
-        val blocks: Seq[ManagedBuffer] =
+        val blocks: Seq[(ManagedBuffer, Seq[Long])] =
           openBlocks.blockIds.map(BlockId.apply).map(blockManager.getBlockData)
-        val streamId = streamManager.registerStream(appId, blocks.iterator.asJava)
+        val streamId = streamManager.registerStream(appId, blocks.map(x => (x._1, seqAsJavaListConverter(x._2.map(long2Long)).asJava)).iterator.asJava)
         logTrace(s"Registered streamId $streamId with ${blocks.size} buffers")
         responseContext.onSuccess(new StreamHandle(streamId, blocks.size).toByteArray)
 

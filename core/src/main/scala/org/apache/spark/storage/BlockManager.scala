@@ -297,7 +297,7 @@ private[spark] class BlockManager(
    * Interface to get local block data. Throws an exception if the block cannot be found or
    * cannot be read successfully.
    */
-  override def getBlockData(blockId: BlockId): ManagedBuffer = {
+  override def getBlockData(blockId: BlockId): (ManagedBuffer, Seq[Long]) = {
     if (blockId.isShuffle) {
       shuffleManager.shuffleBlockResolver.getBlockData(blockId.asInstanceOf[ShuffleBlockId])
     } else {
@@ -305,7 +305,7 @@ private[spark] class BlockManager(
         .asInstanceOf[Option[ByteBuffer]]
       if (blockBytesOpt.isDefined) {
         val buffer = blockBytesOpt.get
-        new NioManagedBuffer(buffer)
+        (new NioManagedBuffer(buffer), List(buffer.remaining))
       } else {
         throw new BlockNotFoundException(blockId.toString)
       }
@@ -443,7 +443,7 @@ private[spark] class BlockManager(
       // TODO: This should gracefully handle case where local block is not available. Currently
       // downstream code will throw an exception.
       Option(
-        shuffleBlockResolver.getBlockData(blockId.asInstanceOf[ShuffleBlockId]).nioByteBuffer())
+        shuffleBlockResolver.getBlockData(blockId.asInstanceOf[ShuffleBlockId])._1.nioByteBuffer())
     } else {
       doGetLocal(blockId, asBlockResult = false).asInstanceOf[Option[ByteBuffer]]
     }
@@ -1187,6 +1187,7 @@ private[spark] class BlockManager(
    * Wrap an output stream for compression if block compression is enabled for its block type
    */
   def wrapForCompression(blockId: BlockId, s: OutputStream): OutputStream = {
+    //println("output stream wrap for compression   ", blockId, s, shouldCompress(blockId))
     if (shouldCompress(blockId)) compressionCodec.compressedOutputStream(s) else s
   }
 
@@ -1194,6 +1195,7 @@ private[spark] class BlockManager(
    * Wrap an input stream for compression if block compression is enabled for its block type
    */
   def wrapForCompression(blockId: BlockId, s: InputStream): InputStream = {
+    //println("input stream wrap for compression   ", blockId, s, shouldCompress(blockId))
     if (shouldCompress(blockId)) compressionCodec.compressedInputStream(s) else s
   }
 

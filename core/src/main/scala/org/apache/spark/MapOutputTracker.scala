@@ -22,6 +22,8 @@ import java.util.Arrays
 import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.{GZIPInputStream, GZIPOutputStream}
 
+import org.apache.spark.shuffle.sort.SortShuffleManager
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Map}
 import scala.reflect.ClassTag
@@ -541,10 +543,13 @@ private[spark] object MapOutputTracker extends Logging {
         logError(errorMessage)
         throw new MetadataFetchFailedException(shuffleId, startPartition, errorMessage)
       } else {
+        var size : Long = 0
         for (part <- startPartition until endPartition) {
-          splitsByAddress.getOrElseUpdate(status.location, ArrayBuffer()) +=
-            ((ShuffleBlockId(shuffleId, mapId, part), status.getSizeForBlock(part)))
+          size += status.getSizeForBlock(part)
         }
+        // if (SparkEnv.get.shuffleManager.isInstanceOf(SortShuffleManager)
+        splitsByAddress.getOrElseUpdate(status.location, ArrayBuffer()) +=
+          ((ShuffleBlockId(shuffleId, mapId, startPartition, endPartition), size))
       }
     }
 

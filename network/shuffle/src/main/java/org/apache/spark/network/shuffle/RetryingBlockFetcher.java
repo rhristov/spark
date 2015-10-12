@@ -20,6 +20,7 @@ package org.apache.spark.network.shuffle;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -190,7 +191,7 @@ public class RetryingBlockFetcher {
    */
   private class RetryingBlockFetchListener implements BlockFetchingListener {
     @Override
-    public void onBlockFetchSuccess(String blockId, ManagedBuffer data) {
+    public void onBlockFetchSuccess(String blockId, ManagedBuffer data, List<Long> sizes) {
       // We will only forward this success message to our parent listener if this block request is
       // outstanding and we are still the active listener.
       boolean shouldForwardSuccess = false;
@@ -203,7 +204,7 @@ public class RetryingBlockFetcher {
 
       // Now actually invoke the parent listener, outside of the synchronized block.
       if (shouldForwardSuccess) {
-        listener.onBlockFetchSuccess(blockId, data);
+        listener.onBlockFetchSuccess(blockId, data, sizes);
       }
     }
 

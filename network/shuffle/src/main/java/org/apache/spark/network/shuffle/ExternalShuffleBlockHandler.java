@@ -35,6 +35,7 @@ import org.apache.spark.network.server.StreamManager;
 import org.apache.spark.network.shuffle.ExternalShuffleBlockResolver.AppExecId;
 import org.apache.spark.network.shuffle.protocol.*;
 import org.apache.spark.network.util.TransportConf;
+import scala.Tuple2;
 
 
 /**
@@ -79,7 +80,7 @@ public class ExternalShuffleBlockHandler extends RpcHandler {
       OpenBlocks msg = (OpenBlocks) msgObj;
       checkAuth(client, msg.appId);
 
-      List<ManagedBuffer> blocks = Lists.newArrayList();
+      List<Tuple2<ManagedBuffer, List<Long>>> blocks = Lists.newArrayList();
       for (String blockId : msg.blockIds) {
         blocks.add(blockManager.getBlockData(msg.appId, msg.execId, blockId));
       }

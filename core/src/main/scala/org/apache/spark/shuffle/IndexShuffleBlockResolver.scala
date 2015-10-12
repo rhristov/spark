@@ -29,6 +29,8 @@ import org.apache.spark.util.Utils
 
 import IndexShuffleBlockResolver.NOOP_REDUCE_ID
 
+import scala.collection.mutable.ArrayBuffer
+
 /**
  * Create and maintain the shuffle blocks' mapping between logic block and physical file location.
  * Data of shuffle blocks from the same map task are stored in a single consolidated data file.
@@ -48,11 +50,11 @@ private[spark] class IndexShuffleBlockResolver(conf: SparkConf) extends ShuffleB
   private val transportConf = SparkTransportConf.fromSparkConf(conf)
 
   def getDataFile(shuffleId: Int, mapId: Int): File = {
-    blockManager.diskBlockManager.getFile(ShuffleDataBlockId(shuffleId, mapId, NOOP_REDUCE_ID))
+    blockManager.diskBlockManager.getFile(ShuffleDataBlockId(shuffleId, mapId))
   }
 
   private def getIndexFile(shuffleId: Int, mapId: Int): File = {
-    blockManager.diskBlockManager.getFile(ShuffleIndexBlockId(shuffleId, mapId, NOOP_REDUCE_ID))
+    blockManager.diskBlockManager.getFile(ShuffleIndexBlockId(shuffleId, mapId))
   }
 
   /**
@@ -95,21 +97,41 @@ private[spark] class IndexShuffleBlockResolver(conf: SparkConf) extends ShuffleB
     }
   }
 
-  override def getBlockData(blockId: ShuffleBlockId): ManagedBuffer = {
+  override def getBlockData(blockId: ShuffleBlockId): (ManagedBuffer, Seq[Long]) = {
+    //println("get blockdata index shuffle block resolver")
     // The block is actually going to be a range of a single map output file for this map, so
     // find out the consolidated file, then the offset within that from our index
     val indexFile = getIndexFile(blockId.shuffleId, blockId.mapId)
 
     val in = new DataInputStream(new FileInputStream(indexFile))
     try {
-      ByteStreams.skipFully(in, blockId.reduceId * 8)
+      val partitionSizes = new ArrayBuffer[Long]
+      ByteStreams.skipFully(in, blockId.startPartition * 8)
       val offset = in.readLong()
-      val nextOffset = in.readLong()
-      new FileSegmentManagedBuffer(
+      var part = blockId.startPartition
+      var nextOffset = offset
+
+      while (part != blockId.endPartition) {
+        val currentOffset = in.readLong()
+        partitionSizes += currentOffset - nextOffset
+        part += 1
+
+        nextOffset = currentOffset
+      }
+
+      val nioBuf2 = (new FileSegmentManagedBuffer(
         transportConf,
         getDataFile(blockId.shuffleId, blockId.mapId),
         offset,
-        nextOffset - offset)
+        nextOffset - offset)).nioByteBuffer()
+      //println((0 until nioBuf2.limit()).map(i => nioBuf2.get(i)).mkString(", "))
+      //println("offset ", offset, "   nextoffset", nextOffset, " startPartition,", blockId.startPartition, " end partition ", blockId.endPartition, partitionSizes)
+      (new FileSegmentManagedBuffer(
+        transportConf,
+        getDataFile(blockId.shuffleId, blockId.mapId),
+        offset,
+        nextOffset - offset),
+       partitionSizes.toSeq)
     } finally {
       in.close()
     }

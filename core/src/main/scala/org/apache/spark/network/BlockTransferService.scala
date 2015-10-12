@@ -91,7 +91,7 @@ abstract class BlockTransferService extends ShuffleClient with Closeable with Lo
         override def onBlockFetchFailure(blockId: String, exception: Throwable): Unit = {
           result.failure(exception)
         }
-        override def onBlockFetchSuccess(blockId: String, data: ManagedBuffer): Unit = {
+        override def onBlockFetchSuccess(blockId: String, data: ManagedBuffer, sizes: java.util.List[java.lang.Long]): Unit = {
           val ret = ByteBuffer.allocate(data.size.toInt)
           ret.put(data.nioByteBuffer())
           ret.flip()

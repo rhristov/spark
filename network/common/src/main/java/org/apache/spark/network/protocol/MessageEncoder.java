@@ -56,7 +56,7 @@ public final class MessageEncoder extends MessageToMessageEncoder<Message> {
       } catch (Exception e) {
         // Re-encode this message as BlockFetchFailure.
         logger.error(String.format("Error opening block %s for client %s",
-          resp.streamChunkId, ctx.channel().remoteAddress()), e);
+        resp.streamChunkId, ctx.channel().remoteAddress()), e);
         encode(ctx, new ChunkFetchFailure(resp.streamChunkId, e.getMessage()), out);
         return;
       }

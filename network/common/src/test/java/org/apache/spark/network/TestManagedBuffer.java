@@ -106,4 +106,9 @@ public class TestManagedBuffer extends ManagedBuffer {
     }
     return false;
   }
+
+  @Override
+  public ManagedBuffer slice(long left, long right) {
+    return this.underlying.slice(left, right);
+  }
 }

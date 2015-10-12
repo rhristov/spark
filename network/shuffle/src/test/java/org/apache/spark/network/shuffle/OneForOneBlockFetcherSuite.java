@@ -18,6 +18,7 @@
 package org.apache.spark.network.shuffle;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -57,7 +58,7 @@ public class OneForOneBlockFetcherSuite {
 
     BlockFetchingListener listener = fetchBlocks(blocks);
 
-    verify(listener).onBlockFetchSuccess("shuffle_0_0_0", blocks.get("shuffle_0_0_0"));
+    verify(listener).onBlockFetchSuccess("shuffle_0_0_0", blocks.get("shuffle_0_0_0"), Arrays.asList(0L));
   }
 
   @Test
@@ -66,11 +67,12 @@ public class OneForOneBlockFetcherSuite {
     blocks.put("b0", new NioManagedBuffer(ByteBuffer.wrap(new byte[12])));
     blocks.put("b1", new NioManagedBuffer(ByteBuffer.wrap(new byte[23])));
     blocks.put("b2", new NettyManagedBuffer(Unpooled.wrappedBuffer(new byte[23])));
+    Long length[] = {12L, 23L, 23L};
 
     BlockFetchingListener listener = fetchBlocks(blocks);
 
     for (int i = 0; i < 3; i ++) {
-      verify(listener, times(1)).onBlockFetchSuccess("b" + i, blocks.get("b" + i));
+      verify(listener, times(1)).onBlockFetchSuccess("b" + i, blocks.get("b" + i), Arrays.asList(length[i]));
     }
   }
 
@@ -84,7 +86,7 @@ public class OneForOneBlockFetcherSuite {
     BlockFetchingListener listener = fetchBlocks(blocks);
 
     // Each failure will cause a failure to be invoked in all remaining block fetches.
-    verify(listener, times(1)).onBlockFetchSuccess("b0", blocks.get("b0"));
+    verify(listener, times(1)).onBlockFetchSuccess("b0", blocks.get("b0"), Arrays.asList(12L));
     verify(listener, times(1)).onBlockFetchFailure(eq("b1"), (Throwable) any());
     verify(listener, times(2)).onBlockFetchFailure(eq("b2"), (Throwable) any());
   }
@@ -99,9 +101,9 @@ public class OneForOneBlockFetcherSuite {
     BlockFetchingListener listener = fetchBlocks(blocks);
 
     // We may call both success and failure for the same block.
-    verify(listener, times(1)).onBlockFetchSuccess("b0", blocks.get("b0"));
+    verify(listener, times(1)).onBlockFetchSuccess("b0", blocks.get("b0"), Arrays.asList(12L));
     verify(listener, times(1)).onBlockFetchFailure(eq("b1"), (Throwable) any());
-    verify(listener, times(1)).onBlockFetchSuccess("b2", blocks.get("b2"));
+    verify(listener, times(1)).onBlockFetchSuccess("b2", blocks.get("b2"), Arrays.asList(21L));
     verify(listener, times(1)).onBlockFetchFailure(eq("b2"), (Throwable) any());
   }
 
@@ -158,7 +160,7 @@ public class OneForOneBlockFetcherSuite {
           ChunkReceivedCallback callback = (ChunkReceivedCallback) invocation.getArguments()[2];
           ManagedBuffer result = blockIterator.next();
           if (result != null) {
-            callback.onSuccess(myChunkIndex, result);
+            callback.onSuccess(myChunkIndex, result, Arrays.asList(result.size()));
           } else {
             callback.onFailure(myChunkIndex, new RuntimeException("Failed " + myChunkIndex));
           }

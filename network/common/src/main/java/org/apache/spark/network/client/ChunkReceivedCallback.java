@@ -19,6 +19,8 @@ package org.apache.spark.network.client;
 
 import org.apache.spark.network.buffer.ManagedBuffer;
 
+import java.util.List;
+
 /**
  * Callback for the result of a single chunk result. For a single stream, the callbacks are
  * guaranteed to be called by the same thread in the same order as the requests for chunks were
@@ -34,7 +36,7 @@ public interface ChunkReceivedCallback {
    * call returns. You must therefore either retain() the buffer or copy its contents before
    * returning.
    */
-  void onSuccess(int chunkIndex, ManagedBuffer buffer);
+  void onSuccess(int chunkIndex, ManagedBuffer buffer, List<Long> sizes);
 
   /**
    * Called upon failure to fetch a particular chunk. Note that this may actually be called due

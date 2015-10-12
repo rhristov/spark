@@ -21,6 +21,9 @@ import io.netty.channel.Channel;
 
 import org.apache.spark.network.buffer.ManagedBuffer;
 import org.apache.spark.network.client.TransportClient;
+import scala.Tuple2;
+
+import java.util.List;
 
 /**
  * The StreamManager is used to fetch individual chunks from a stream. This is used in
@@ -44,7 +47,7 @@ public abstract class StreamManager {
    * @param streamId id of a stream that has been previously registered with the StreamManager.
    * @param chunkIndex 0-indexed chunk of the stream that's requested
    */
-  public abstract ManagedBuffer getChunk(long streamId, int chunkIndex);
+  public abstract Tuple2<ManagedBuffer, List<Long>> getChunk(long streamId, int chunkIndex);
 
   /**
    * Associates a stream with a single client connection, which is guaranteed to be the only reader

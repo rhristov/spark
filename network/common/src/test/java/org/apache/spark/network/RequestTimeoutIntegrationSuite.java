@@ -64,7 +64,7 @@ public class RequestTimeoutIntegrationSuite {
 
     defaultManager = new StreamManager() {
       @Override
-      public ManagedBuffer getChunk(long streamId, int chunkIndex) {
+      public scala.Tuple2<ManagedBuffer, List<Long>> getChunk(long streamId, int chunkIndex) {
         throw new UnsupportedOperationException();
       }
     };
@@ -184,9 +184,10 @@ public class RequestTimeoutIntegrationSuite {
     final byte[] response = new byte[16];
     final StreamManager manager = new StreamManager() {
       @Override
-      public ManagedBuffer getChunk(long streamId, int chunkIndex) {
+      public scala.Tuple2<ManagedBuffer, List<Long>> getChunk(long streamId, int chunkIndex) {
         Uninterruptibles.sleepUninterruptibly(FOREVER, TimeUnit.MILLISECONDS);
-        return new NioManagedBuffer(ByteBuffer.wrap(response));
+        return new scala.Tuple2(new NioManagedBuffer(ByteBuffer.wrap(response)), Arrays.asList(response.length));
+
       }
     };
     RpcHandler handler = new RpcHandler() {
@@ -255,7 +256,7 @@ public class RequestTimeoutIntegrationSuite {
     }
 
     @Override
-    public void onSuccess(int chunkIndex, ManagedBuffer buffer) {
+    public void onSuccess(int chunkIndex, ManagedBuffer buffer, List<Long> sizes) {
       synchronized(this) {
         try {
           success = buffer.nioByteBuffer().array();

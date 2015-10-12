@@ -29,6 +29,8 @@ import org.apache.spark.serializer.Serializer
 import org.apache.spark.storage._
 import org.apache.spark.util.{MetadataCleaner, MetadataCleanerType, TimeStampedHashMap}
 
+import scala.collection.mutable.ArrayBuffer
+
 /** A group of writers for a ShuffleMapTask, one writer per reducer. */
 private[spark] trait ShuffleWriterGroup {
   val writers: Array[DiskBlockObjectWriter]
@@ -82,7 +84,7 @@ private[spark] class FileShuffleBlockResolver(conf: SparkConf)
       val serializerInstance = serializer.newInstance()
       val writers: Array[DiskBlockObjectWriter] = {
         Array.tabulate[DiskBlockObjectWriter](numReducers) { bucketId =>
-          val blockId = ShuffleBlockId(shuffleId, mapId, bucketId)
+          val blockId = ShuffleBlockId(shuffleId, mapId, bucketId, bucketId + 1)
           val blockFile = blockManager.diskBlockManager.getFile(blockId)
           // Because of previous failures, the shuffle file may already exist on this machine.
           // If so, remove it.
@@ -107,9 +109,10 @@ private[spark] class FileShuffleBlockResolver(conf: SparkConf)
     }
   }
 
-  override def getBlockData(blockId: ShuffleBlockId): ManagedBuffer = {
+  override def getBlockData(blockId: ShuffleBlockId): (ManagedBuffer, Seq[Long]) = {
+    //println("indexshuffleblockresolver getblockdata")
     val file = blockManager.diskBlockManager.getFile(blockId)
-    new FileSegmentManagedBuffer(transportConf, file, 0, file.length)
+    (new FileSegmentManagedBuffer(transportConf, file, 0, file.length), List(file.length))
   }
 
   /** Remove all the blocks / files and metadata related to a particular shuffle. */
@@ -126,7 +129,7 @@ private[spark] class FileShuffleBlockResolver(conf: SparkConf)
     shuffleStates.get(shuffleId) match {
       case Some(state) =>
         for (mapId <- state.completedMapTasks.asScala; reduceId <- 0 until state.numReducers) {
-          val blockId = new ShuffleBlockId(shuffleId, mapId, reduceId)
+          val blockId = new ShuffleBlockId(shuffleId, mapId, reduceId, reduceId + 1)
           val file = blockManager.diskBlockManager.getFile(blockId)
           if (!file.delete()) {
             logWarning(s"Error deleting ${file.getPath()}")

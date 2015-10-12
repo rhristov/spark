@@ -18,7 +18,9 @@
 package org.apache.spark.network.shuffle;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Iterator;
+import java.util.List;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -73,8 +75,9 @@ public class ExternalShuffleBlockHandlerSuite {
   public void testOpenShuffleBlocks() {
     RpcResponseCallback callback = mock(RpcResponseCallback.class);
 
-    ManagedBuffer block0Marker = new NioManagedBuffer(ByteBuffer.wrap(new byte[3]));
-    ManagedBuffer block1Marker = new NioManagedBuffer(ByteBuffer.wrap(new byte[7]));
+    scala.Tuple2<ManagedBuffer, List<Long>> block0Marker = new scala.Tuple2(new NioManagedBuffer(ByteBuffer.wrap(new byte[3])), Arrays.asList(3L));
+    scala.Tuple2<ManagedBuffer, List<Long>> block1Marker = new scala.Tuple2(new NioManagedBuffer(ByteBuffer.wrap(new byte[7])), Arrays.asList(7L));
+
     when(blockResolver.getBlockData("app0", "exec1", "b0")).thenReturn(block0Marker);
     when(blockResolver.getBlockData("app0", "exec1", "b1")).thenReturn(block1Marker);
     byte[] openBlocks = new OpenBlocks("app0", "exec1", new String[] { "b0", "b1" }).toByteArray();
@@ -91,10 +94,10 @@ public class ExternalShuffleBlockHandlerSuite {
     assertEquals(2, handle.numChunks);
 
     @SuppressWarnings("unchecked")
-    ArgumentCaptor<Iterator<ManagedBuffer>> stream = (ArgumentCaptor<Iterator<ManagedBuffer>>)
+    ArgumentCaptor<Iterator<scala.Tuple2<ManagedBuffer, List<Long>>>> stream = (ArgumentCaptor<Iterator<scala.Tuple2<ManagedBuffer, List<Long>>>>)
         (ArgumentCaptor<?>) ArgumentCaptor.forClass(Iterator.class);
     verify(streamManager, times(1)).registerStream(anyString(), stream.capture());
-    Iterator<ManagedBuffer> buffers = stream.getValue();
+    Iterator<scala.Tuple2<ManagedBuffer, List<Long>>> buffers = stream.getValue();
     assertEquals(block0Marker, buffers.next());
     assertEquals(block1Marker, buffers.next());
     assertFalse(buffers.hasNext());

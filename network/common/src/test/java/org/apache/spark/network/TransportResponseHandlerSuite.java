@@ -35,6 +35,8 @@ import org.apache.spark.network.protocol.RpcFailure;
 import org.apache.spark.network.protocol.RpcResponse;
 import org.apache.spark.network.protocol.StreamChunkId;
 
+import java.util.Arrays;
+
 public class TransportResponseHandlerSuite {
   @Test
   public void handleSuccessfulFetch() {
@@ -45,8 +47,8 @@ public class TransportResponseHandlerSuite {
     handler.addFetchRequest(streamChunkId, callback);
     assertEquals(1, handler.numOutstandingRequests());
 
-    handler.handle(new ChunkFetchSuccess(streamChunkId, new TestManagedBuffer(123)));
-    verify(callback, times(1)).onSuccess(eq(0), (ManagedBuffer) any());
+    handler.handle(new ChunkFetchSuccess(streamChunkId, new TestManagedBuffer(123), Arrays.asList(123L)));
+    verify(callback, times(1)).onSuccess(eq(0), (ManagedBuffer) any(), Arrays.asList(anyLong()));
     assertEquals(0, handler.numOutstandingRequests());
   }
 
@@ -72,11 +74,11 @@ public class TransportResponseHandlerSuite {
     handler.addFetchRequest(new StreamChunkId(1, 2), callback);
     assertEquals(3, handler.numOutstandingRequests());
 
-    handler.handle(new ChunkFetchSuccess(new StreamChunkId(1, 0), new TestManagedBuffer(12)));
+    handler.handle(new ChunkFetchSuccess(new StreamChunkId(1, 0), new TestManagedBuffer(12), Arrays.asList(12L)));
     handler.exceptionCaught(new Exception("duh duh duhhhh"));
 
     // should fail both b2 and b3
-    verify(callback, times(1)).onSuccess(eq(0), (ManagedBuffer) any());
+    verify(callback, times(1)).onSuccess(eq(0), (ManagedBuffer) any(), Arrays.asList(anyLong()));
     verify(callback, times(1)).onFailure(eq(1), (Throwable) any());
     verify(callback, times(1)).onFailure(eq(2), (Throwable) any());
     assertEquals(0, handler.numOutstandingRequests());

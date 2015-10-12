@@ -20,11 +20,12 @@ package org.apache.spark.storage
 import java.io.InputStream
 import java.util.concurrent.LinkedBlockingQueue
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, HashSet, Queue}
 import scala.util.control.NonFatal
 
 import org.apache.spark.{Logging, SparkException, TaskContext}
-import org.apache.spark.network.buffer.ManagedBuffer
+import org.apache.spark.network.buffer.{NioManagedBuffer, NettyManagedBuffer, ManagedBuffer}
 import org.apache.spark.network.shuffle.{BlockFetchingListener, ShuffleClient}
 import org.apache.spark.shuffle.FetchFailedException
 import org.apache.spark.util.Utils
@@ -64,13 +65,13 @@ final class ShuffleBlockFetcherIterator(
    *
    * This should equal localBlocks.size + remoteBlocks.size.
    */
-  private[this] var numBlocksToFetch = 0
+  private[this] var numBlocksToFetch : Long = 0
 
   /**
    * The number of blocks proccessed by the caller. The iterator is exhausted when
    * [[numBlocksProcessed]] == [[numBlocksToFetch]].
    */
-  private[this] var numBlocksProcessed = 0
+  private[this] var numBlocksProcessed : Long = 0
 
   private[this] val startTime = System.currentTimeMillis
 
@@ -91,6 +92,7 @@ final class ShuffleBlockFetcherIterator(
    * in case of a runtime exception when processing the current buffer.
    */
   @volatile private[this] var currentResult: FetchResult = null
+  @volatile private[this] var saveResult: FetchResult = null
 
   /**
    * Queue of fetch requests to issue; we'll pull requests off this gradually to make sure that
@@ -114,12 +116,13 @@ final class ShuffleBlockFetcherIterator(
   // Decrements the buffer reference count.
   // The currentResult is set to null to prevent releasing the buffer again on cleanup()
   private[storage] def releaseCurrentResultBuffer(): Unit = {
+    //println ("releaseCurrentResultBuffer", currentResult, saveResult)
     // Release the current buffer if necessary
-    currentResult match {
+    saveResult match {
       case SuccessFetchResult(_, _, _, buf) => buf.release()
       case _ =>
     }
-    currentResult = null
+    saveResult = null
   }
 
   /**
@@ -148,19 +151,43 @@ final class ShuffleBlockFetcherIterator(
     val sizeMap = req.blocks.map { case (blockId, size) => (blockId.toString, size) }.toMap
     val blockIds = req.blocks.map(_._1.toString)
 
+    //println(s"send rqeuest blockIds = ${blockIds} sizeMap = ${sizeMap}")
     val address = req.address
     shuffleClient.fetchBlocks(address.host, address.port, address.executorId, blockIds.toArray,
       new BlockFetchingListener {
-        override def onBlockFetchSuccess(blockId: String, buf: ManagedBuffer): Unit = {
+        override def onBlockFetchSuccess(blockId: String, buf: ManagedBuffer, sizes: java.util.List[java.lang.Long]): Unit = {
           // Only add the buffer to results queue if the iterator is not zombie,
           // i.e. cleanup() has not been called yet.
+          //println("ON BLOCK FETCH SUCCESS")
           if (!isZombie) {
-            // Increment the ref count because we need to pass this to a different thread.
-            // This needs to be released after use.
-            buf.retain()
-            results.put(new SuccessFetchResult(BlockId(blockId), address, sizeMap(blockId), buf))
-            shuffleMetrics.incRemoteBytesRead(buf.size)
-            shuffleMetrics.incRemoteBlocksFetched(1)
+            var currentIndex : Long = 0
+            //println("sizes ", sizes.asScala)
+
+            for (size <- sizes.asScala) {
+              if (size > 0) {
+                //println(s"buf = $buf, curIdx = $currentIndex, curIdx + size = ${currentIndex + size}, size = ${buf.size()}")
+                val nioBuf = buf.nioByteBuffer()
+                //println("Entries:")
+                //println((0 until nioBuf.limit()).map(i => nioBuf.get(i)).mkString(", "))
+                //println(buf.nioByteBuffer())
+                val managedBuf: ManagedBuffer = new NioManagedBuffer(
+                  nioBuf.slice().position(currentIndex.toInt).limit((currentIndex + size).toInt).asInstanceOf[java.nio.ByteBuffer])
+                //println(s"Sliced buffer: $managedBuf")
+                val nioBuf2 = managedBuf.nioByteBuffer()
+                //println((nioBuf2.position() until nioBuf2.limit()).map(i => nioBuf2.get(i)).mkString(", "))
+                currentIndex += size
+
+                // Increment the ref count because we need to pass this to a different thread.
+                // This needs to be released after use.
+                buf.retain()
+                //println("put in queue ", blockId, address, size, managedBuf)
+                results.put(new SuccessFetchResult(BlockId(blockId), address, size, managedBuf))
+                //println("fail")
+              }
+            }
+            results.put(new BlockEndResult(BlockId(blockId), address))
+            shuffleMetrics.incRemoteBytesRead(currentIndex)
+            shuffleMetrics.incRemoteBlocksFetched(sizes.size)
           }
           logTrace("Got remote block " + blockId + " after " + Utils.getUsedTimeMs(startTime))
         }
@@ -184,21 +211,23 @@ final class ShuffleBlockFetcherIterator(
     // at most maxBytesInFlight in order to limit the amount of data in flight.
     val remoteRequests = new ArrayBuffer[FetchRequest]
 
+    //println(s"split local remote blocks ${blocksByAddress}")
     // Tracks total number of blocks (including zero sized blocks)
     var totalBlocks = 0
     for ((address, blockInfos) <- blocksByAddress) {
       totalBlocks += blockInfos.size
       if (address.executorId == blockManager.blockManagerId.executorId) {
+        //println("local block")
         // Filter out zero-sized blocks
         localBlocks ++= blockInfos.filter(_._2 != 0).map(_._1)
         numBlocksToFetch += localBlocks.size
       } else {
+        //println("remote block")
         val iterator = blockInfos.iterator
         var curRequestSize = 0L
         var curBlocks = new ArrayBuffer[(BlockId, Long)]
         while (iterator.hasNext) {
           val (blockId, size) = iterator.next()
-          // Skip empty blocks
           if (size > 0) {
             curBlocks += ((blockId, size))
             remoteBlocks += blockId
@@ -221,6 +250,9 @@ final class ShuffleBlockFetcherIterator(
         }
       }
     }
+    //println(s"remote requests ${remoteRequests}")
+    //println(s"local blocks ${localBlocks}  numblocks ${numBlocksToFetch}")
+    //println(numBlocksToFetch, totalBlocks)
     logInfo(s"Getting $numBlocksToFetch non-empty blocks out of $totalBlocks blocks")
     remoteRequests
   }
@@ -235,11 +267,22 @@ final class ShuffleBlockFetcherIterator(
     while (iter.hasNext) {
       val blockId = iter.next()
       try {
-        val buf = blockManager.getBlockData(blockId)
-        shuffleMetrics.incLocalBlocksFetched(1)
-        shuffleMetrics.incLocalBytesRead(buf.size)
-        buf.retain()
-        results.put(new SuccessFetchResult(blockId, blockManager.blockManagerId, 0, buf))
+        var currentIndex : Long = 0
+        val (buf, singleBlockSizes) = blockManager.getBlockData(blockId)
+        for (size <- singleBlockSizes) {
+          if (size > 0) {
+            val managedBuf: ManagedBuffer = buf.slice(currentIndex, size)
+            currentIndex += size
+
+            // Increment the ref count because we need to pass this to a different thread.
+            // This needs to be released after use.
+            buf.retain()
+            results.put(new SuccessFetchResult(blockId, blockManager.blockManagerId, size, managedBuf))
+          }
+        }
+        results.put(new BlockEndResult(blockId, blockManager.blockManagerId))
+        shuffleMetrics.incLocalBlocksFetched(singleBlockSizes.size)
+        shuffleMetrics.incLocalBytesRead(currentIndex)
       } catch {
         case e: Exception =>
           // If we see an exception, stop immediately.
@@ -270,7 +313,34 @@ final class ShuffleBlockFetcherIterator(
     logDebug("Got local blocks in " + Utils.getUsedTimeMs(startTime))
   }
 
-  override def hasNext: Boolean = numBlocksProcessed < numBlocksToFetch
+  override def hasNext(): Boolean = {
+    //println("call has next")
+    val startFetchWait = System.currentTimeMillis()
+    while (currentResult == null && numBlocksProcessed != numBlocksToFetch) {
+      //println("has next", currentResult, numBlocksProcessed, numBlocksToFetch)
+      val result = results.take()
+      val stopFetchWait = System.currentTimeMillis()
+      shuffleMetrics.incFetchWaitTime(stopFetchWait - startFetchWait)
+      //println("fetched ", result)
+
+      result match {
+        case BlockEndResult(_, _) => numBlocksProcessed += 1
+        case _ => currentResult = result
+      }
+
+      result match {
+        case SuccessFetchResult(_, _, size, _) => bytesInFlight -= size
+        case _ =>
+      }
+
+      // Send fetch requests up to maxBytesInFlight
+      fetchUpToMaxBytes()
+      //println(s"end has next ${currentResult}, ${numBlocksProcessed}, ${numBlocksToFetch}")
+    }
+
+
+    return currentResult != null
+  }
 
   /**
    * Fetches the next (BlockId, InputStream). If a task fails, the ManagedBuffers
@@ -281,32 +351,35 @@ final class ShuffleBlockFetcherIterator(
    * Throws a FetchFailedException if the next block could not be fetched.
    */
   override def next(): (BlockId, InputStream) = {
-    numBlocksProcessed += 1
-    val startFetchWait = System.currentTimeMillis()
-    currentResult = results.take()
+    //println ("call next")
     val result = currentResult
-    val stopFetchWait = System.currentTimeMillis()
-    shuffleMetrics.incFetchWaitTime(stopFetchWait - startFetchWait)
-
-    result match {
-      case SuccessFetchResult(_, _, size, _) => bytesInFlight -= size
-      case _ =>
-    }
-    // Send fetch requests up to maxBytesInFlight
-    fetchUpToMaxBytes()
+    var next_result : (BlockId, InputStream) = null
 
     result match {
       case FailureFetchResult(blockId, address, e) =>
-        throwFetchFailedException(blockId, address, e)
+        next_result = throwFetchFailedException(blockId, address, e)
 
       case SuccessFetchResult(blockId, address, _, buf) =>
         try {
-          (result.blockId, new BufferReleasingInputStream(buf.createInputStream(), this))
+          //println(s"now on buffer $buf")
+          //println("length = " + buf.size())
+          val nioBuf2 = buf.nioByteBuffer()
+          //println((nioBuf2.position() until nioBuf2.limit()).map(i => nioBuf2.get(i)).mkString(", "))
+          next_result = (result.blockId, new BufferReleasingInputStream(buf.createInputStream(), this))
+          //println(s"buffer releasing inputstream = ${next_result._2}")
+          //println(s"done with $buf")
         } catch {
           case NonFatal(t) =>
-            throwFetchFailedException(blockId, address, t)
+            next_result = throwFetchFailedException(blockId, address, t)
         }
+
+      case _ =>
     }
+    saveResult = currentResult
+    currentResult = null
+    //println("take next ", currentResult, next_result)
+
+    return next_result
   }
 
   private def fetchUpToMaxBytes(): Unit = {
@@ -319,8 +392,8 @@ final class ShuffleBlockFetcherIterator(
 
   private def throwFetchFailedException(blockId: BlockId, address: BlockManagerId, e: Throwable) = {
     blockId match {
-      case ShuffleBlockId(shufId, mapId, reduceId) =>
-        throw new FetchFailedException(address, shufId.toInt, mapId.toInt, reduceId, e)
+      case ShuffleBlockId(shufId, mapId, startPartition, endPartition) =>
+        throw new FetchFailedException(address, shufId.toInt, mapId.toInt, startPartition, e)
       case _ =>
         throw new SparkException(
           "Failed to get block " + blockId + ", which is not a shuffle block", e)
@@ -411,5 +484,10 @@ object ShuffleBlockFetcherIterator {
       blockId: BlockId,
       address: BlockManagerId,
       e: Throwable)
+    extends FetchResult
+
+  private[storage] case class BlockEndResult(
+      blockId: BlockId,
+      address: BlockManagerId)
     extends FetchResult
 }

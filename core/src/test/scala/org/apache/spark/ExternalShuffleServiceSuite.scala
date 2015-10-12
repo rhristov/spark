@@ -17,6 +17,7 @@
 
 package org.apache.spark
 
+import org.apache.spark.shuffle.sort.SortShuffleManager
 import org.scalatest.BeforeAndAfterAll
 
 import org.apache.spark.network.TransportContext
@@ -63,9 +64,12 @@ class ExternalShuffleServiceSuite extends ShuffleSuite with BeforeAndAfterAll {
     // Therefore, we should wait until all slaves are up
     sc.jobProgressListener.waitUntilExecutorsUp(2, 60000)
 
+    //println("before parallize")
     val rdd = sc.parallelize(0 until 1000, 10).map(i => (i, 1)).reduceByKey(_ + _)
 
+    //println("before count1")
     rdd.count()
+    //println("before count2")
     rdd.count()
 
     // Invalidate the registered executors, disallowing access to their shuffle blocks (without

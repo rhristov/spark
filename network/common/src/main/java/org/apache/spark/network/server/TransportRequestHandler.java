@@ -36,6 +36,9 @@ import org.apache.spark.network.protocol.ChunkFetchSuccess;
 import org.apache.spark.network.protocol.RpcFailure;
 import org.apache.spark.network.protocol.RpcResponse;
 import org.apache.spark.network.util.NettyUtils;
+import scala.Tuple2;
+
+import java.util.List;
 
 /**
  * A handler that processes requests from clients and writes chunk data back. Each handler is
@@ -95,11 +98,14 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
 
     logger.trace("Received req from {} to fetch block {}", client, req.streamChunkId);
 
+    List<Long> sizes;
     ManagedBuffer buf;
     try {
       streamManager.checkAuthorization(reverseClient, req.streamChunkId.streamId);
       streamManager.registerChannel(channel, req.streamChunkId.streamId);
-      buf = streamManager.getChunk(req.streamChunkId.streamId, req.streamChunkId.chunkIndex);
+      Tuple2<ManagedBuffer, List<Long>> chunk = streamManager.getChunk(req.streamChunkId.streamId, req.streamChunkId.chunkIndex);
+      buf = chunk._1();
+      sizes = chunk._2();
     } catch (Exception e) {
       logger.error(String.format(
         "Error opening block %s for request from %s", req.streamChunkId, client), e);
@@ -107,7 +113,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
       return;
     }
 
-    respond(new ChunkFetchSuccess(req.streamChunkId, buf));
+    respond(new ChunkFetchSuccess(req.streamChunkId, buf, sizes));
   }
 
   private void processRpcRequest(final RpcRequest req) {

@@ -27,7 +27,7 @@ trait BlockDataManager {
    * Interface to get local block data. Throws an exception if the block cannot be found or
    * cannot be read successfully.
    */
-  def getBlockData(blockId: BlockId): ManagedBuffer
+  def getBlockData(blockId: BlockId): (ManagedBuffer, Seq[Long])
 
   /**
    * Put the block locally, using the given storage level.

@@ -17,10 +17,7 @@
 
 package org.apache.spark.network.server;
 
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -31,6 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.spark.network.buffer.ManagedBuffer;
 import org.apache.spark.network.client.TransportClient;
+import scala.Tuple2;
 
 /**
  * StreamManager which allows registration of an Iterator&lt;ManagedBuffer&gt;, which are individually
@@ -45,7 +43,7 @@ public class OneForOneStreamManager extends StreamManager {
   /** State of a single stream. */
   private static class StreamState {
     final String appId;
-    final Iterator<ManagedBuffer> buffers;
+    final Iterator<Tuple2<ManagedBuffer, List<Long>>> buffers;
 
     // The channel associated to the stream
     Channel associatedChannel = null;
@@ -54,7 +52,7 @@ public class OneForOneStreamManager extends StreamManager {
     // that the caller only requests each chunk one at a time, in order.
     int curChunk = 0;
 
-    StreamState(String appId, Iterator<ManagedBuffer> buffers) {
+    StreamState(String appId, Iterator<Tuple2<ManagedBuffer, List<Long>>> buffers) {
       this.appId = appId;
       this.buffers = Preconditions.checkNotNull(buffers);
     }
@@ -75,7 +73,7 @@ public class OneForOneStreamManager extends StreamManager {
   }
 
   @Override
-  public ManagedBuffer getChunk(long streamId, int chunkIndex) {
+  public Tuple2<ManagedBuffer, List<Long>> getChunk(long streamId, int chunkIndex) {
     StreamState state = streams.get(streamId);
     if (chunkIndex != state.curChunk) {
       throw new IllegalStateException(String.format(
@@ -85,7 +83,7 @@ public class OneForOneStreamManager extends StreamManager {
         "Requested chunk index beyond end %s", chunkIndex));
     }
     state.curChunk += 1;
-    ManagedBuffer nextChunk = state.buffers.next();
+    Tuple2<ManagedBuffer, List<Long>> nextChunk = state.buffers.next();
 
     if (!state.buffers.hasNext()) {
       logger.trace("Removing stream id {}", streamId);
@@ -105,7 +103,7 @@ public class OneForOneStreamManager extends StreamManager {
 
         // Release all remaining buffers.
         while (state.buffers.hasNext()) {
-          state.buffers.next().release();
+          state.buffers.next()._1().release();
         }
       }
     }
@@ -135,7 +133,7 @@ public class OneForOneStreamManager extends StreamManager {
    * If an app ID is provided, only callers who've authenticated with the given app ID will be
    * allowed to fetch from this stream.
    */
-  public long registerStream(String appId, Iterator<ManagedBuffer> buffers) {
+  public long registerStream(String appId, Iterator<Tuple2<ManagedBuffer, List<Long>>> buffers) {
     long myStreamId = nextStreamId.getAndIncrement();
     streams.put(myStreamId, new StreamState(appId, buffers));
     return myStreamId;

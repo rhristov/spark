@@ -271,14 +271,14 @@ public class SparkSaslSuite {
             }
             return null;
           }
-        }).when(callback).onSuccess(anyInt(), any(ManagedBuffer.class));
+        }).when(callback).onSuccess(anyInt(), any(ManagedBuffer.class), Arrays.asList(anyLong()));
 
       synchronized (lock) {
         ctx.client.fetchChunk(0, 0, callback);
         lock.wait(10 * 1000);
       }
 
-      verify(callback, times(1)).onSuccess(anyInt(), any(ManagedBuffer.class));
+      verify(callback, times(1)).onSuccess(anyInt(), any(ManagedBuffer.class), Arrays.asList(anyLong()));
       verify(callback, never()).onFailure(anyInt(), any(Throwable.class));
 
       byte[] received = ByteStreams.toByteArray(response.get().createInputStream());

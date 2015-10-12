@@ -18,6 +18,7 @@
 package org.apache.spark.network.shuffle;
 
 import java.util.Arrays;
+import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,9 +67,9 @@ public class OneForOneBlockFetcher {
   /** Callback invoked on receipt of each chunk. We equate a single chunk to a single block. */
   private class ChunkCallback implements ChunkReceivedCallback {
     @Override
-    public void onSuccess(int chunkIndex, ManagedBuffer buffer) {
+    public void onSuccess(int chunkIndex, ManagedBuffer buffer, List<Long> sizes) {
       // On receipt of a chunk, pass it upwards as a block.
-      listener.onBlockFetchSuccess(blockIds[chunkIndex], buffer);
+      listener.onBlockFetchSuccess(blockIds[chunkIndex], buffer, sizes);
     }
 
     @Override

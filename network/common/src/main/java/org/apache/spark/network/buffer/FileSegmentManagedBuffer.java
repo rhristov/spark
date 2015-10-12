@@ -151,4 +151,9 @@ public final class FileSegmentManagedBuffer extends ManagedBuffer {
       .add("length", length)
       .toString();
   }
+
+  @Override
+  public ManagedBuffer slice(long left, long size) {
+    return new FileSegmentManagedBuffer(this.conf, this.file, offset + left, size);
+  }
 }

@@ -111,7 +111,7 @@ class AkkaUtilsSuite extends SparkFunSuite with LocalSparkContext with ResetSyst
     // this should succeed since security off
     assert(slaveTracker.getMapSizesByExecutorId(10, 0).toSeq ===
            Seq((BlockManagerId("a", "hostA", 1000),
-             ArrayBuffer((ShuffleBlockId(10, 0, 0), size1000)))))
+             ArrayBuffer((ShuffleBlockId(10, 0, 0, 1), size1000)))))
 
     rpcEnv.shutdown()
     slaveRpcEnv.shutdown()
@@ -158,7 +158,7 @@ class AkkaUtilsSuite extends SparkFunSuite with LocalSparkContext with ResetSyst
     // this should succeed since security on and passwords match
     assert(slaveTracker.getMapSizesByExecutorId(10, 0) ===
            Seq((BlockManagerId("a", "hostA", 1000),
-             ArrayBuffer((ShuffleBlockId(10, 0, 0), size1000)))))
+             ArrayBuffer((ShuffleBlockId(10, 0, 0, 1), size1000)))))
 
     rpcEnv.shutdown()
     slaveRpcEnv.shutdown()
@@ -237,7 +237,7 @@ class AkkaUtilsSuite extends SparkFunSuite with LocalSparkContext with ResetSyst
 
     // this should succeed since security off
     assert(slaveTracker.getMapSizesByExecutorId(10, 0) ===
-      Seq((BlockManagerId("a", "hostA", 1000), ArrayBuffer((ShuffleBlockId(10, 0, 0), size1000)))))
+      Seq((BlockManagerId("a", "hostA", 1000), ArrayBuffer((ShuffleBlockId(10, 0, 0, 1), size1000)))))
 
     rpcEnv.shutdown()
     slaveRpcEnv.shutdown()
@@ -283,7 +283,7 @@ class AkkaUtilsSuite extends SparkFunSuite with LocalSparkContext with ResetSyst
     slaveTracker.updateEpoch(masterTracker.getEpoch)
 
     assert(slaveTracker.getMapSizesByExecutorId(10, 0) ===
-      Seq((BlockManagerId("a", "hostA", 1000), ArrayBuffer((ShuffleBlockId(10, 0, 0), size1000)))))
+      Seq((BlockManagerId("a", "hostA", 1000), ArrayBuffer((ShuffleBlockId(10, 0, 0, 1), size1000)))))
 
     rpcEnv.shutdown()
     slaveRpcEnv.shutdown()

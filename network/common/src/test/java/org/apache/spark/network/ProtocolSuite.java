@@ -17,6 +17,7 @@
 
 package org.apache.spark.network;
 
+import java.util.Arrays;
 import java.util.List;
 
 import com.google.common.primitives.Ints;
@@ -84,8 +85,8 @@ public class ProtocolSuite {
 
   @Test
   public void responses() {
-    testServerToClient(new ChunkFetchSuccess(new StreamChunkId(1, 2), new TestManagedBuffer(10)));
-    testServerToClient(new ChunkFetchSuccess(new StreamChunkId(1, 2), new TestManagedBuffer(0)));
+    testServerToClient(new ChunkFetchSuccess(new StreamChunkId(1, 2), new TestManagedBuffer(10), Arrays.asList(10L)));
+    testServerToClient(new ChunkFetchSuccess(new StreamChunkId(1, 2), new TestManagedBuffer(0), Arrays.asList(0L)));
     testServerToClient(new ChunkFetchFailure(new StreamChunkId(1, 2), "this is an error"));
     testServerToClient(new ChunkFetchFailure(new StreamChunkId(1, 2), ""));
     testServerToClient(new RpcResponse(12345, new byte[0]));

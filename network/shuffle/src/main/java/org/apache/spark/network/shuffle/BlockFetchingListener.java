@@ -18,8 +18,10 @@
 package org.apache.spark.network.shuffle;
 
 import java.util.EventListener;
+import java.util.List;
 
 import org.apache.spark.network.buffer.ManagedBuffer;
+import scala.collection.mutable.ArrayBuffer;
 
 public interface BlockFetchingListener extends EventListener {
   /**
@@ -27,7 +29,7 @@ public interface BlockFetchingListener extends EventListener {
    * automatically. If the data will be passed to another thread, the receiver should retain()
    * and release() the buffer on their own, or copy the data to a new buffer.
    */
-  void onBlockFetchSuccess(String blockId, ManagedBuffer data);
+  void onBlockFetchSuccess(String blockId, ManagedBuffer data, List<Long> sizes);
 
   /**
    * Called at least once per block upon failures.

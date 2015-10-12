@@ -38,7 +38,7 @@ private[spark] sealed trait MapStatus {
    * If a block is non-empty, then this method MUST return a non-zero size.  This invariant is
    * necessary for correctness, since block fetchers are allowed to skip zero-size blocks.
    */
-  def getSizeForBlock(reduceId: Int): Long
+  def getSizeForBlock(partitionId: Int) : Long
 }
 
 
